@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Travel Operations Ticketing - LGT Hotel Stays</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+body{font-family:Arial;background:#f4f6f9;margin:0;padding:20px}
+h1{background:#003366;color:white;padding:12px;border-radius:8px;margin-top:0}
+.card{background:white;padding:15px;border-radius:8px;margin-bottom:15px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.field{display:flex;flex-direction:column}
+label{font-weight:bold;margin-bottom:4px;font-size:13px}
+input,select,textarea{padding:8px;font-size:14px}
+button{padding:9px 14px;margin-right:5px;cursor:pointer;border:1px solid #ccc;border-radius:5px;background:#f0f0f0}
+button:hover{background:#e6e6e6}
+button:disabled{opacity:.5;cursor:default}
+table{width:100%;border-collapse:collapse;background:white;font-size:13px}
+th,td{border:1px solid #ddd;padding:6px;text-align:left}
+th{background:#ffeb3b}
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:15px}
+.stat{background:white;padding:12px;text-align:center;border-radius:8px}
+.stat b{font-size:20px;display:block}
+#exportBtn{background:#1b5e20;color:white}
+#refreshBtn{background:#1565c0;color:white}
+#clearAllBtn{background:#b71c1c;color:white}
+#logoutBtn{background:#555;color:white}
+#syncStatus{margin-left:10px;font-size:13px;font-weight:bold;padding:4px 8px;border-radius:6px}
+#syncStatus.sync-live{color:#1b5e20;background:#e8f5e9}
+#syncStatus.sync-syncing{color:#f57c00;background:#fff3e0}
+#syncStatus.sync-error{color:#b71c1c;background:#ffebee}
+
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab-btn{background:#e3e8ef;border:none;padding:10px 18px;border-radius:6px 6px 0 0;font-weight:bold;color:#003366}
+.tab-btn.active{background:#003366;color:white}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+.badge{display:inline-block;font-size:11px;padding:3px 8px;border-radius:10px;color:white;font-weight:bold}
+.badge.Open{background:#1976d2}
+.badge.Pending{background:#f57c00}
+.badge.WaitingforClientResponse{background:#8e24aa}
+.badge.Confirmed{background:#2e7d32}
+.badge.Lost{background:#b71c1c}
+
+#loginScreen{max-width:380px;margin:80px auto;text-align:center}
+#loginScreen h1{margin-bottom:20px}
+#loginScreen input{width:100%;margin-bottom:10px;box-sizing:border-box}
+#loginScreen button{width:100%;background:#003366;color:white;padding:12px;font-size:15px}
+#loginError{color:#b71c1c;font-size:13px;margin-top:8px;min-height:18px}
+#whoami{float:right;font-size:14px;color:#444}
+#whoami b{color:#003366}
+
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px}
+.dash-card h3{margin:0 0 10px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px}
+.dash-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+.dash-row b{color:#1b5e20}
+
+.main-layout{display:flex;gap:15px;align-items:flex-start}
+.form-card{flex:1;min-width:0}
+.pending-panel{width:300px;flex-shrink:0;max-height:600px;overflow-y:auto}
+.pending-panel h2{margin:0 0 10px;font-size:16px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px}
+.pending-item{border:1px solid #ddd;border-radius:6px;padding:8px;margin-bottom:8px;background:#fafafa}
+.pending-item .pi-top{display:flex;justify-content:space-between;font-weight:bold;font-size:13px}
+.pending-item .pi-meta{font-size:12px;color:#555;margin-top:4px}
+.pending-empty{color:#888;font-size:13px;text-align:center;padding:20px 0}
+
+table select{padding:4px;font-size:12px;width:100%}
+input.date-error{border:2px solid #e53935 !important;background:#fff5f5}
+table input.inline-handled{padding:4px;font-size:12px;width:100%;border:1px solid #ccc}
+td.lost-row{background:#ffebee}
+
+@media (max-width:900px){
+ .grid{grid-template-columns:repeat(2,1fr)}
+ .stats{grid-template-columns:repeat(3,1fr)}
+ .main-layout{flex-direction:column}
+ .pending-panel{width:100%;max-height:300px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="card">
+  <h1 style="background:none;color:#003366;padding:0">Travel Operations Login</h1>
+  <input id="loginName" placeholder="Your name">
+  <input id="loginPassword" type="password" placeholder="Password">
+  <button onclick="doLogin()">Log In</button>
+  <div id="loginError"></div>
+</div>
+
+<!-- ============ MAIN APP (hidden until logged in) ============ -->
+<div id="app" style="display:none">
+
+<h1>Travel Operations Ticketing - LGT Hotel Stays
+  <span id="whoami"></span>
+</h1>
+
+<div class="stats">
+<div class="stat"><b id="tot">0</b>Total</div>
+<div class="stat"><b id="opn">0</b>Open</div>
+<div class="stat"><b id="pen">0</b>Pending</div>
+<div class="stat"><b id="wai">0</b>Waiting on Client</div>
+<div class="stat"><b id="con">0</b>Confirmed</div>
+<div class="stat"><b id="lst">0</b>Lost</div>
+</div>
+
+<div class="card">
+<input id="search" placeholder="Search..." oninput="onSearchInput()" style="width:220px">
+<button id="refreshBtn" onclick="refreshFromSheet(true)">🔄 Refresh Now</button>
+<button id="exportBtn" onclick="exportToExcel()">⬇ Export to Excel</button>
+<span id="syncStatus" class="sync-syncing">⏳ Connecting…</span>
+<button id="logoutBtn" onclick="logout()" style="float:right">Log Out</button>
+<button id="clearAllBtn" onclick="clearAllFromSheet()" style="float:right;margin-right:8px" class="manager-only">🗑 Clear ALL records</button>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="newTab" onclick="switchTab('newTab')">+ New Request</button>
+  <button class="tab-btn" data-tab="ticketsTab" onclick="switchTab('ticketsTab')">Tickets</button>
+  <button class="tab-btn" data-tab="lostTab" onclick="switchTab('lostTab')">Lost</button>
+  <button class="tab-btn manager-only" data-tab="dashboardTab" onclick="switchTab('dashboardTab')">📊 Dashboard</button>
+</div>
+
+<!-- NEW REQUEST TAB -->
+<div id="newTab" class="tab-panel active">
+<div class="main-layout">
+<div class="card form-card">
+<div class="grid">
+<div class="field"><label>Date</label><input id="date" readonly></div>
+<div class="field"><label>Client</label><input id="client"></div>
+<div class="field"><label>TR Number</label><input id="tr"></div>
+<div class="field"><label>Priority</label>
+  <select id="priority"><option>Normal</option><option>Urgent</option></select></div>
+<div class="field"><label>Assign To</label><select id="assignTo"><option value="">Loading…</option></select></div>
+</div>
+<p style="color:#666;font-size:12px">City, Country, Vendor, Check-in/Check-out and Booking details will be filled in by whoever handles this request. The request is created directly as <b>Pending</b>, assigned to whoever you pick above.</p>
+<button onclick="saveRecord()" style="background:#003366;color:white;padding:10px 20px">Submit Request</button>
+</div>
+
+<div class="card pending-panel">
+<h2>Pending Enquiries</h2>
+<div id="pendingList"></div>
+</div>
+</div>
+</div>
+
+<!-- TICKETS TAB -->
+<div id="ticketsTab" class="tab-panel">
+<div class="card" style="overflow-x:auto">
+<table>
+<thead>
+<tr>
+<th>Date</th><th>Client</th><th>TR Number</th><th>City</th><th>Country</th>
+<th>Check In</th><th>Check Out</th><th>Nights</th>
+<th>Status</th><th>Handled By</th><th>Branch</th><th>Action</th>
+</tr>
+</thead>
+<tbody id="ticketsBody"></tbody>
+</table>
+<p id="ticketsEmpty" style="display:none;color:#888;text-align:center;padding:20px">No tickets to show.</p>
+</div>
+</div>
+
+<!-- LOST TAB -->
+<div id="lostTab" class="tab-panel">
+<p style="color:#666">Bookings whose Check-In date has passed without being Confirmed. Status is auto-set to <b>Lost</b>.</p>
+<div class="card" style="overflow-x:auto">
+<table>
+<thead>
+<tr>
+<th>Date</th><th>Client</th><th>TR Number</th><th>City</th><th>Country</th>
+<th>Check In</th><th>Check Out</th><th>Nights</th>
+<th>Status</th><th>Handled By</th><th>Branch</th>
+</tr>
+</thead>
+<tbody id="lostBody"></tbody>
+</table>
+<p id="lostEmpty" style="display:none;color:#888;text-align:center;padding:20px">No lost bookings. 🎉</p>
+</div>
+</div>
+
+<!-- DASHBOARD TAB -->
+<div id="dashboardTab" class="tab-panel">
+<div class="card">
+<h2 style="color:#003366;margin-top:0">Branch-wise Performance</h2>
+<p id="dashboardDateNote" style="color:#666;margin-top:-6px"></p>
+<div id="dashboardContent" class="dash-grid"></div>
+</div>
+</div>
+
+</div><!-- /#app -->
+
+<script>
+/* =====================================================================
+   CONFIG
+   ===================================================================== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbwYPrjm-D-Rx-kw6w5acPR9FKPqritVgl_Vyd1vK8GfD4CHPEfP1QrZ9wZMhDgMhB_IEg/exec';
+const AUTO_REFRESH_MS = 15000;
+
+const STATUS_FLOW = ['Pending','Waiting for Client Response','Confirmed'];
+
+let data = [];
+let currentUser = null; // { name, role, branch }
+let isSyncing = false;
+let activeTab = 'newTab';
+
+/* ---------------------------------------------------------------------
+   AUTH
+   --------------------------------------------------------------------- */
+
+function doLogin(){
+  const name = document.getElementById('loginName').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+
+  if (!name || !password) { errEl.textContent = 'Enter both name and password.'; return; }
+  if (!API_URL || API_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
+    errEl.textContent = 'App not configured yet: paste your Apps Script Web App URL into API_URL near the top of the script.';
+    return;
+  }
+
+  apiPost({ action:'login', name:name, password:password })
+    .then(res => {
+      currentUser = res.user;
+      sessionStorage.setItem('ticketingUser', JSON.stringify(currentUser));
+      enterApp();
+    })
+    .catch(err => { errEl.textContent = err.message || 'Login failed.'; });
+}
+
+function logout(){
+  currentUser = null;
+  sessionStorage.removeItem('ticketingUser');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'block';
+  document.getElementById('loginName').value = '';
+  document.getElementById('loginPassword').value = '';
+}
+
+function enterApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  const who = document.getElementById('whoami');
+  who.innerHTML = '<b>' + escapeHtml(currentUser.name) + '</b> &middot; ' + escapeHtml(currentUser.role) +
+    (currentUser.branch ? ' &middot; ' + escapeHtml(currentUser.branch) : '');
+
+  // manager-only controls
+  document.querySelectorAll('.manager-only').forEach(el => {
+    el.style.display = (currentUser.role === 'Manager') ? '' : 'none';
+  });
+
+  loadBranchEmployees();
+
+  setToday();
+  startAutoRefresh();
+}
+
+/* try to resume a session on page load */
+function tryResumeSession(){
+  const saved = sessionStorage.getItem('ticketingUser');
+  if (saved) {
+    try { currentUser = JSON.parse(saved); enterApp(); return; } catch(e){}
+  }
+}
+
+/* ---------------------------------------------------------------------
+   API LAYER
+   --------------------------------------------------------------------- */
+
+function setSyncStatus(state, msg){
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.className = 'sync-' + state;
+  el.textContent = msg;
+}
+
+async function apiGet(params){
+  if (!API_URL || API_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
+    throw new Error('API_URL is not set. Paste your Apps Script Web App URL near the top of the <script> section.');
+  }
+  const qs = params ? ('?' + new URLSearchParams(params).toString()) : '';
+  const res = await fetch(API_URL + qs, { method:'GET' });
+  if (!res.ok) throw new Error('GET failed: ' + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
+async function apiPost(payload){
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('POST failed: ' + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
+async function refreshFromSheet(showSpinner){
+  if (isSyncing || !currentUser) return;
+  isSyncing = true;
+  if (showSpinner) setSyncStatus('syncing', '⏳ Syncing…');
+  try{
+    const json = await apiGet({ action:'records' });
+    data = json.records || [];
+    setSyncStatus('live', '🟢 Live · synced ' + new Date().toLocaleTimeString());
+    render();
+  }catch(err){
+    console.error('Sync error:', err);
+    setSyncStatus('error', '🔴 Sync failed — check connection');
+  }finally{
+    isSyncing = false;
+  }
+}
+
+function startAutoRefresh(){
+  refreshFromSheet(true);
+  setInterval(() => refreshFromSheet(false), AUTO_REFRESH_MS);
+}
+
+/* ---------------------------------------------------------------------
+   TABS
+   --------------------------------------------------------------------- */
+
+function switchTab(tabId){
+  if (tabId === 'dashboardTab' && currentUser.role !== 'Manager') return;
+  activeTab = tabId;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === tabId));
+  render();
+}
+
+/* ---------------------------------------------------------------------
+   FORM HELPERS
+   --------------------------------------------------------------------- */
+
+function setToday(){
+  const d = new Date();
+  document.getElementById('date').value = d.toISOString().split('T')[0];
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function clearForm(){
+  document.getElementById('client').value = '';
+  document.getElementById('tr').value = '';
+  document.getElementById('priority').value = 'Normal';
+  setToday();
+  populateAssignToDropdown();
+}
+
+/* ---------------------------------------------------------------------
+   CREATE — Client, TR, Priority, Assign To only. Created directly as
+   Pending (already assigned). Branch is auto-tagged from whoever it's
+   assigned to (hidden field, not shown on the form).
+   --------------------------------------------------------------------- */
+
+async function saveRecord(){
+  const client = document.getElementById('client');
+  if (!client.value.trim()){ alert('Please enter a Client name before submitting.'); client.focus(); return; }
+
+  const assignSel = document.getElementById('assignTo');
+  const assignedName = assignSel.value;
+  if (!assignedName){ alert('Please choose who this should be assigned to.'); assignSel.focus(); return; }
+
+  const employees = window._branchEmployees || [];
+  const assignedEmp = employees.find(e => e.name === assignedName);
+  const branch = (assignedEmp && assignedEmp.branch) || currentUser.branch || '';
+
+  const record = {
+    date: document.getElementById('date').value,
+    client: client.value,
+    tr: document.getElementById('tr').value,
+    priority: document.getElementById('priority').value,
+    status: 'Pending',
+    handled: assignedName,
+    branch: branch,
+    city: '', country: '', vendor: '', bookingref: '', remarks: '',
+    checkin: '', checkout: '', nights: ''
+  };
+
+  try{
+    await apiPost({ action:'create', record:record, actor:currentUser });
+    clearForm();
+    await refreshFromSheet(false);
+    switchTab('ticketsTab');
+  }catch(err){
+    alert('Could not submit request.\n\n' + err.message);
+  }
+}
+
+/* Fills the Assign To dropdown: managers pick anyone in their branch;
+   employees see themselves pre-selected (auto-assign-to-self), since
+   they're submitting on behalf of their own work. */
+function populateAssignToDropdown(){
+  const sel = document.getElementById('assignTo');
+  if (!sel) return;
+  sel.innerHTML = '';
+
+  const employees = window._branchEmployees || [];
+
+  if (currentUser.role === 'Manager') {
+    const placeholder = document.createElement('option');
+    placeholder.value = ''; placeholder.textContent = 'Choose who should handle this…';
+    sel.appendChild(placeholder);
+    employees.forEach(emp => {
+      const o = document.createElement('option');
+      o.value = emp.name;
+      o.textContent = emp.name === currentUser.name ? emp.name + ' (you)' : emp.name;
+      sel.appendChild(o);
+    });
+  } else {
+    // Employee: locked to self
+    const o = document.createElement('option');
+    o.value = currentUser.name; o.textContent = currentUser.name + ' (you)';
+    sel.appendChild(o);
+    sel.value = currentUser.name;
+    sel.disabled = true;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   SEARCH
+   --------------------------------------------------------------------- */
+
+const SEARCH_FIELDS = ['client','tr','city','country','vendor','checkin','checkout','bookingref','handled','remarks','branch'];
+let searchDebounceTimer = null;
+
+function onSearchInput(){
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(render, 150);
+}
+
+function rowSearchText(r){
+  return SEARCH_FIELDS.map(f => r[f]||'').join(' ').toLowerCase();
+}
+
+function statusClass(status){
+  return String(status||'').replace(/\s+/g,'');
+}
+
+/* ---------------------------------------------------------------------
+   VISIBILITY RULES
+   - Manager: sees all requests in their own branch (assigned or not),
+     plus unassigned Open requests (no branch yet) so they can route them.
+   - Employee: sees Open requests in their branch (to self-assign) +
+     anything already Handled By them.
+   --------------------------------------------------------------------- */
+
+function visibleRecords(){
+  if (!currentUser) return [];
+  if (currentUser.role === 'Manager') {
+    return data.filter(r => !r.branch || r.branch === currentUser.branch);
+  }
+  // Employee
+  return data.filter(r =>
+    (r.status === 'Open' && (!r.branch || r.branch === currentUser.branch)) ||
+    r.handled === currentUser.name
+  );
+}
+
+/* ---------------------------------------------------------------------
+   RENDER
+   --------------------------------------------------------------------- */
+
+function render(){
+  if (!currentUser) return;
+  const visible = visibleRecords();
+  const s = document.getElementById('search').value.toLowerCase();
+
+  let totalNights=0,o=0,p=0,w=0,c=0,lostCount=0;
+  visible.forEach(r=>{
+    totalNights += Number(r.nights||0);
+    const st = r.status;
+    if (st==='Open') o++;
+    if (st==='Pending') p++;
+    if (st==='Waiting for Client Response') w++;
+    if (st==='Confirmed') c++;
+    if (st==='Lost') lostCount++;
+  });
+
+  document.getElementById('tot').textContent = visible.length;
+  document.getElementById('opn').textContent = o;
+  document.getElementById('pen').textContent = p;
+  document.getElementById('wai').textContent = w;
+  document.getElementById('con').textContent = c;
+  document.getElementById('lst').textContent = lostCount;
+
+  renderPendingPanel(visible, s);
+
+  if (activeTab === 'ticketsTab') renderTicketsTable(visible, s);
+  if (activeTab === 'lostTab') renderLostTable(visible, s);
+  if (activeTab === 'dashboardTab' && currentUser.role === 'Manager') renderDashboard();
+}
+
+/* ---------------------------------------------------------------------
+   PENDING ENQUIRIES SIDEBAR (always visible on the New Request tab,
+   shows live Open + Pending items so both roles can see what needs
+   attention without leaving the form)
+   --------------------------------------------------------------------- */
+
+function renderPendingPanel(visible, searchTerm){
+  const list = document.getElementById('pendingList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const pending = visible
+    .filter(r => ['Open','Pending'].includes(r.status))
+    .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
+
+  if (pending.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'pending-empty';
+    empty.textContent = 'No pending enquiries';
+    list.appendChild(empty);
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  pending.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'pending-item';
+
+    const top = document.createElement('div');
+    top.className = 'pi-top';
+    const name = document.createElement('span');
+    name.textContent = r.client || '(no client)';
+    top.appendChild(name);
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + statusClass(r.status);
+    badge.textContent = r.status;
+    top.appendChild(badge);
+    item.appendChild(top);
+
+    const meta = document.createElement('div');
+    meta.className = 'pi-meta';
+    const parts = [];
+    if (r.tr) parts.push('TR ' + r.tr);
+    if (r.city) parts.push(r.city);
+    if (r.checkin) parts.push('In ' + toDisplayDate(r.checkin));
+    if (r.handled) parts.push('Handled: ' + r.handled);
+    meta.textContent = parts.join(' · ') || '—';
+    item.appendChild(meta);
+
+    frag.appendChild(item);
+  });
+  list.appendChild(frag);
+}
+
+/* ---------------------------------------------------------------------
+   TICKETS TABLE — identical for Manager and Employee.
+   Status and Handled By are both editable inline, directly in the row.
+   --------------------------------------------------------------------- */
+
+function renderTicketsTable(visible, searchTerm){
+  const tbody = document.getElementById('ticketsBody');
+  const emptyMsg = document.getElementById('ticketsEmpty');
+
+  const rows = visible
+    .filter(r => r.status !== 'Lost' && r.status !== 'Confirmed')
+    .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
+
+  emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
+
+  // Don't touch the row the user is actively typing/selecting in. Important:
+  // even just moving that row's DOM node through appendChild() — even if
+  // it ends up back in the same place — silently drops browser focus from
+  // whatever input was focused inside it. So the active row must stay
+  // completely untouched: never detached, never re-appended. Everything
+  // else gets rebuilt fresh as normal.
+  const activeEl = document.activeElement;
+  const activeRow = activeEl && tbody.contains(activeEl) ? activeEl.closest('tr') : null;
+  const activeRowId = activeRow ? activeRow.dataset.rowid : null;
+
+  if (rows.length === 0) {
+    if (activeRowId) return; // mid-edit on a row that's been filtered out (e.g. search) — leave it alone
+    tbody.innerHTML = '';
+    return;
+  }
+
+  // Remove every row except the active one (if any)
+  Array.from(tbody.children).forEach(tr => {
+    if (tr !== activeRow) tr.remove();
+  });
+
+  // Re-insert everything else in the correct order. Walk forward through
+  // the target row list, inserting each new row immediately before
+  // wherever the cursor currently sits; when we reach the active row's
+  // slot, skip insertion (it's already physically there) and just move
+  // the cursor past it. insertBefore(node, null) appends at the end,
+  // which naturally handles "active row is last" and "no active row".
+  let cursor = tbody.firstChild;
+  rows.forEach(r => {
+    if (activeRowId && r.rowId === activeRowId) {
+      cursor = activeRow.nextSibling;
+      return;
+    }
+    const tr = buildTicketRow(r);
+    tbody.insertBefore(tr, cursor);
+  });
+}
+
+function renderLostTable(visible, searchTerm){
+  const tbody = document.getElementById('lostBody');
+  const emptyMsg = document.getElementById('lostEmpty');
+  tbody.innerHTML = '';
+
+  const rows = visible
+    .filter(r => r.status === 'Lost')
+    .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
+
+  emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
+  if (rows.length === 0) return;
+
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(buildLostRow(r)));
+  tbody.appendChild(frag);
+}
+
+function buildLostRow(r){
+  const tr = document.createElement('tr');
+  const cells = [r.date, r.client, r.tr, r.city, r.country, toDisplayDate(r.checkin), toDisplayDate(r.checkout), r.nights];
+  cells.forEach(val => {
+    const td = document.createElement('td');
+    td.className = 'lost-row';
+    td.textContent = val || '';
+    tr.appendChild(td);
+  });
+
+  const statusTd = document.createElement('td');
+  statusTd.className = 'lost-row';
+  const badge = document.createElement('span');
+  badge.className = 'badge Lost';
+  badge.textContent = 'Lost';
+  statusTd.appendChild(badge);
+  tr.appendChild(statusTd);
+
+  const handledTd = document.createElement('td');
+  handledTd.className = 'lost-row';
+  handledTd.textContent = r.handled || '';
+  tr.appendChild(handledTd);
+
+  const branchTd = document.createElement('td');
+  branchTd.className = 'lost-row';
+  branchTd.textContent = r.branch || '';
+  tr.appendChild(branchTd);
+
+  return tr;
+}
+
+function buildTicketRow(r){
+  const tr = document.createElement('tr');
+  tr.dataset.rowid = r.rowId || '';
+
+  // editable details directly in the table for whoever holds the ticket
+  const canEditDetails = (r.handled === currentUser.name) || currentUser.role === 'Manager';
+  // once a TR Number is assigned, only that person (or a manager) may touch
+  // Status/Handled By/fields for it — enforced here for UI clarity, and
+  // again server-side in Code.gs since this endpoint is publicly reachable
+  const isLockedToSomeoneElse = r.handled && r.handled !== currentUser.name && currentUser.role !== 'Manager';
+
+  const dateTd = document.createElement('td'); dateTd.textContent = r.date || ''; tr.appendChild(dateTd);
+  const clientTd = document.createElement('td'); clientTd.textContent = r.client || ''; tr.appendChild(clientTd);
+  const trTd = document.createElement('td'); trTd.textContent = r.tr || ''; tr.appendChild(trTd);
+
+  const cityTd = document.createElement('td');
+  if (canEditDetails) {
+    const inp = document.createElement('input');
+    inp.value = r.city || ''; inp.placeholder = 'City'; inp.style.width = '80px'; inp.style.fontSize = '12px';
+    inp.onchange = () => updateDetailField(r.rowId, 'city', inp.value);
+    cityTd.appendChild(inp);
+  } else { cityTd.textContent = r.city || ''; }
+  tr.appendChild(cityTd);
+
+  const countryTd = document.createElement('td');
+  if (canEditDetails) {
+    const inp = document.createElement('input');
+    inp.value = r.country || ''; inp.placeholder = 'Country'; inp.style.width = '90px'; inp.style.fontSize = '12px';
+    inp.onchange = () => updateDetailField(r.rowId, 'country', inp.value);
+    countryTd.appendChild(inp);
+  } else { countryTd.textContent = r.country || ''; }
+  tr.appendChild(countryTd);
+
+  const checkinTd = document.createElement('td');
+  if (canEditDetails) {
+    const inp = document.createElement('input');
+    inp.value = toDisplayDate(r.checkin) || ''; inp.placeholder = '22-June-26'; inp.style.width = '110px'; inp.style.fontSize = '12px';
+    inp.onchange = () => handleDateFieldChange(inp, r.rowId, 'checkin');
+    checkinTd.appendChild(inp);
+  } else { checkinTd.textContent = toDisplayDate(r.checkin) || ''; }
+  tr.appendChild(checkinTd);
+
+  const checkoutTd = document.createElement('td');
+  if (canEditDetails) {
+    const inp = document.createElement('input');
+    inp.value = toDisplayDate(r.checkout) || ''; inp.placeholder = '26-June-26'; inp.style.width = '110px'; inp.style.fontSize = '12px';
+    inp.onchange = () => handleDateFieldChange(inp, r.rowId, 'checkout');
+    checkoutTd.appendChild(inp);
+  } else { checkoutTd.textContent = toDisplayDate(r.checkout) || ''; }
+  tr.appendChild(checkoutTd);
+
+  const nightsTd = document.createElement('td'); nightsTd.textContent = r.nights || ''; tr.appendChild(nightsTd);
+
+  // STATUS — free dropdown, jump to any status, available to everyone
+  const statusTd = document.createElement('td');
+
+  const statusSel = document.createElement('select');
+  STATUS_OPTIONS.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt;
+    if (r.status === opt) o.selected = true;
+    statusSel.appendChild(o);
+  });
+  if (isLockedToSomeoneElse) {
+    statusSel.disabled = true;
+    statusSel.title = 'Assigned to ' + r.handled + ' — only they or a manager can change this';
+  } else {
+    statusSel.onchange = () => updateStatus(r.rowId, statusSel.value);
+  }
+  statusTd.appendChild(statusSel);
+  tr.appendChild(statusTd);
+
+  // HANDLED BY — dropdown of branch employees (or free text if branch unknown yet)
+  const handledTd = document.createElement('td');
+  const employees = window._branchEmployees || [];
+  if (isLockedToSomeoneElse) {
+    const lockedSpan = document.createElement('span');
+    lockedSpan.textContent = r.handled;
+    lockedSpan.title = 'Locked — only ' + r.handled + ' or a manager can reassign this';
+    lockedSpan.style.color = '#888';
+    handledTd.appendChild(lockedSpan);
+  } else if (r.status === 'Open' || employees.length === 0) {
+    const inp = document.createElement('input');
+    inp.className = 'inline-handled';
+    inp.value = r.handled || '';
+    inp.placeholder = 'Type a name…';
+    inp.onchange = () => assignTicket(r.rowId, inp.value);
+    handledTd.appendChild(inp);
+  } else {
+    const sel = document.createElement('select');
+    const blank = document.createElement('option');
+    blank.value = ''; blank.textContent = '(unassigned)';
+    sel.appendChild(blank);
+    employees.forEach(emp => {
+      const o = document.createElement('option');
+      o.value = emp.name; o.textContent = emp.name;
+      if (r.handled === emp.name) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => { if (sel.value) assignTicket(r.rowId, sel.value); };
+    handledTd.appendChild(sel);
+  }
+  tr.appendChild(handledTd);
+
+  const branchTd = document.createElement('td'); branchTd.textContent = r.branch || ''; tr.appendChild(branchTd);
+
+  const actionTd = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.textContent = 'Delete';
+  delBtn.onclick = () => deleteTicket(r.rowId);
+  actionTd.appendChild(delBtn);
+  tr.appendChild(actionTd);
+
+  return tr;
+}
+
+const STATUS_OPTIONS = ['Pending','Waiting for Client Response','Confirmed','Lost'];
+
+/* ---------------------------------------------------------------------
+   DATE HANDLING — internal storage stays YYYY-MM-DD (so Sheet sorting,
+   Lost-detection comparisons, and Excel export remain unambiguous).
+   Display and input are DD-Month-YY, e.g. "22-June-26". Spelling out the
+   month removes day/month ambiguity entirely, and the parser accepts
+   full names, short names (Jun), any casing, and common separators.
+   --------------------------------------------------------------------- */
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function toDisplayDate(isoStr){
+  if (!isoStr) return '';
+  const m = String(isoStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return isoStr; // already not in storage format, show as-is
+  const day = Number(m[3]);
+  const monthName = MONTH_NAMES[Number(m[2]) - 1];
+  const yy = m[1].slice(2);
+  return day + '-' + monthName + '-' + yy;
+}
+
+/* Shared onchange handler for Check In / Check Out inputs. Deliberately
+   does NOT use alert() — a blocking popup mid-typing (e.g. triggered by
+   clicking Refresh Now, or tabbing away while only half-typed) is jarring
+   and was the exact issue reported. Instead: valid input gets normalized
+   and saved silently; invalid/incomplete input just gets a red outline so
+   the problem is visible without interrupting anything, and nothing is
+   sent to the Sheet until it actually parses. */
+function handleDateFieldChange(inp, rowId, field){
+  const typed = inp.value.trim();
+
+  if (!typed) {
+    inp.classList.remove('date-error');
+    updateDetailField(rowId, field, '');
+    return;
+  }
+
+  const parsed = parseFlexibleDate(typed);
+  if (!parsed) {
+    inp.classList.add('date-error');
+    inp.title = 'Could not understand this date — try a format like 22-June-26';
+    return; // leave the raw text as typed, don't save, don't pop anything up
+  }
+
+  inp.classList.remove('date-error');
+  inp.title = '';
+  inp.value = toDisplayDate(parsed);
+  updateDetailField(rowId, field, parsed);
+}
+
+function monthFromName(token){
+  const t = token.trim().toLowerCase();
+  if (t.length < 3) return null; // need at least 3 letters to disambiguate (e.g. "Jun" vs "Jul")
+
+  // exact 3-letter abbreviation match first (Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
+  for (let i = 0; i < MONTH_NAMES.length; i++) {
+    if (MONTH_NAMES[i].toLowerCase().slice(0,3) === t.slice(0,3)) {
+      // confirm the rest of the typed text is consistent with the full name (catches genuine typos)
+      if (MONTH_NAMES[i].toLowerCase().startsWith(t)) return i + 1;
+      if (t.length === 3) return i + 1; // plain abbreviation, e.g. "jun"
+    }
+  }
+  return null;
+}
+
+function parseFlexibleDate(input){
+  if (!input || !input.trim()) return '';
+  const raw = input.trim();
+
+  // Tokenize by switching between digit-runs and letter-runs, ignoring any
+  // separators (-, /, ., space, comma) entirely. This is what makes
+  // "21june26", "21-Jun-26", "21 JUNE 2026", "21.June.26" all parse the
+  // same way — we don't care what (if anything) separates the parts.
+  const tokens = raw.match(/[0-9]+|[A-Za-z]+/g);
+  if (!tokens || tokens.length < 2) return null;
+
+  // Find the one letter-token (the month name/abbreviation) and treat the
+  // remaining digit-tokens, in the order they appeared, as day then year.
+  const letterTokens = tokens.filter(t => /[A-Za-z]/.test(t));
+  const digitTokens = tokens.filter(t => /^[0-9]+$/.test(t));
+
+  if (letterTokens.length === 1 && digitTokens.length === 2) {
+    const mo = monthFromName(letterTokens[0]);
+    if (mo) {
+      // digit tokens appear in original order; day is whichever isn't 4-digit/year-like,
+      // but normally it's [day, year] in that order since month is spelled out
+      let [first, second] = digitTokens;
+      let dStr = first, yStr = second;
+      // if the day-looking token is actually 4 digits, it's the year and got swapped
+      if (first.length >= 4 || (first.length === 2 && Number(first) > 31)) { dStr = second; yStr = first; }
+      const y = normalizeYear(yStr);
+      const d = Number(dStr);
+      if (isValidDate(y, mo, d)) return pad4(y) + '-' + pad2(mo) + '-' + pad2(d);
+    }
+  }
+
+  // No month name found at all — try ISO (YYYY-MM-DD pasted by mistake)
+  if (letterTokens.length === 0 && digitTokens.length === 3) {
+    let [a, b, c] = digitTokens;
+    // YYYY-MM-DD: first token is 4 digits
+    if (a.length === 4) {
+      if (isValidDate(a, b, c)) return pad4(a) + '-' + pad2(b) + '-' + pad2(c);
+    }
+    // DD-MM-YYYY numeric fallback (no month name typed at all)
+    let y = normalizeYear(c);
+    if (isValidDate(y, b, a)) return pad4(y) + '-' + pad2(b) + '-' + pad2(a);
+    if (isValidDate(y, a, b)) return pad4(y) + '-' + pad2(a) + '-' + pad2(b); // tolerate MM-DD swap
+  }
+
+  return null; // genuinely unparseable — caller keeps the raw text so the user can fix it
+}
+
+function normalizeYear(yStr){
+  let y = String(yStr);
+  if (y.length === 2) y = (Number(y) < 50 ? '20' : '19') + y; // 00-49 -> 2000s, else 1900s
+  return Number(y);
+}
+
+function isValidDate(y, mo, d){
+  y = Number(y); mo = Number(mo); d = Number(d);
+  if (!y || !mo || !d) return false;
+  if (mo < 1 || mo > 12) return false;
+  const daysInMonth = new Date(y, mo, 0).getDate();
+  if (d < 1 || d > daysInMonth) return false;
+  return true;
+}
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function pad4(n){ return String(n).padStart(4,'0'); }
+
+/* ---------------------------------------------------------------------
+   INLINE DETAIL EDITS (Check In / Check Out typed directly in the table)
+   --------------------------------------------------------------------- */
+
+async function updateDetailField(rowId, field, value){
+  const rec = data.find(r => r.rowId === rowId);
+  if (!rec) return;
+
+  const fields = {};
+  fields[field] = value;
+  rec[field] = value; // update local cache immediately so nights calc below is accurate
+
+  // auto-calc nights when both dates are present — read from the just-updated
+  // local record, not a stale copy, so this is correct even if checkin and
+  // checkout are edited back-to-back in quick succession.
+  if (rec.checkin && rec.checkout) {
+    const d1 = new Date(rec.checkin), d2 = new Date(rec.checkout);
+    const diff = Math.round((d2 - d1) / (1000*60*60*24));
+    if (diff > 0) {
+      fields.nights = diff;
+      rec.nights = diff;
+    }
+  }
+
+  // Update the Nights cell in place without re-rendering the whole table —
+  // avoids blanking/losing focus on whatever the user is still editing.
+  updateNightsCellInPlace(rowId, rec.nights);
+
+  try{
+    await apiPost({ action:'updateFields', rowId:rowId, fields:fields, actor:currentUser });
+    // No full refreshFromSheet() here on purpose — the local `data` cache is
+    // already correct, and re-rendering now would interrupt active typing.
+    // The next scheduled auto-refresh (or manual Refresh Now) will reconcile
+    // with the Sheet, by which point the user has likely moved on.
+  }catch(err){
+    alert(err.message); // lock messages are already clear on their own; refresh to revert the rejected edit
+    await refreshFromSheet(false);
+  }
+}
+
+function updateNightsCellInPlace(rowId, nights){
+  const tbody = document.getElementById('ticketsBody');
+  if (!tbody) return;
+  const row = tbody.querySelector('tr[data-rowid="' + cssEscape(rowId) + '"]');
+  if (!row) return;
+  const nightsTd = row.children[7]; // Date,Client,TR,City,Country,CheckIn,CheckOut,Nights -> index 7
+  if (nightsTd) nightsTd.textContent = nights || '';
+}
+
+function cssEscape(str){
+  return String(str).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+}
+
+/* ---------------------------------------------------------------------
+   ACTIONS
+   --------------------------------------------------------------------- */
+
+async function assignTicket(rowId, employeeName){
+  if (!employeeName || !employeeName.trim()){
+    await refreshFromSheet(false); // revert any stray blank edit back to what's on the Sheet
+    return;
+  }
+  try{
+    await apiPost({ action:'assign', rowId:rowId, employeeName:employeeName.trim(), branch:currentUser.branch, actor:currentUser });
+    await refreshFromSheet(false);
+  }catch(err){
+    alert(err.message);
+    await refreshFromSheet(false); // undo the dropdown's optimistic-looking change
+  }
+}
+
+async function updateStatus(rowId, status){
+  const rec = data.find(r => r.rowId === rowId);
+  const prev = rec ? rec.status : null;
+  if (rec) rec.status = status;
+  render();
+  try{
+    await apiPost({ action:'updateStatus', rowId:rowId, status:status, actor:currentUser });
+    await refreshFromSheet(false);
+  }catch(err){
+    alert(err.message);
+    if (rec) rec.status = prev;
+    render();
+  }
+}
+
+async function deleteTicket(rowId){
+  if (!confirm('Delete this ticket permanently?')) return;
+  try{
+    await apiPost({ action:'delete', rowId:rowId, actor:currentUser });
+    await refreshFromSheet(false);
+  }catch(err){
+    alert(err.message);
+  }
+}
+
+async function clearAllFromSheet(){
+  const visible = visibleRecords();
+  if (visible.length === 0){ alert('Nothing to clear.'); return; }
+  const typed = prompt('This permanently deletes ALL ' + visible.length + ' visible record(s). Type DELETE to confirm.');
+  if (typed !== 'DELETE') return;
+  try{
+    for (const r of visible) { if (r.rowId) await apiPost({ action:'delete', rowId:r.rowId }); }
+    await refreshFromSheet(false);
+    alert('Cleared.');
+  }catch(err){
+    alert('Something went wrong while clearing.\n\n' + err.message);
+  }
+}
+
+/* ---------------------------------------------------------------------
+   EXPORT
+   --------------------------------------------------------------------- */
+
+function exportToExcel(){
+  const visible = visibleRecords();
+  if (visible.length === 0){ alert('Nothing to export.'); return; }
+  if (typeof XLSX === 'undefined'){ alert('Excel library failed to load.'); return; }
+
+  const headers = ['Date','Client','TR Number','City','Country','Vendor','Check In','Check Out','Nights','Booking Ref','Handled By','Branch','Priority','Status','Remarks'];
+  const rows = visible.map(r => [r.date,r.client,r.tr,r.city,r.country,r.vendor,toDisplayDate(r.checkin),toDisplayDate(r.checkout),r.nights,r.bookingref,r.handled,r.branch,r.priority,r.status,r.remarks]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `Travel_Operations_LGT_${today}.xlsx`);
+}
+
+/* ---------------------------------------------------------------------
+   DASHBOARD — per-branch, per-employee stats
+   --------------------------------------------------------------------- */
+
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
+}
+
+function wasUpdatedToday(r){
+  if (!r.lastUpdated) return false;
+  // lastUpdated is "YYYY-MM-DD HH:mm:ss" — just compare the date portion
+  return String(r.lastUpdated).slice(0, 10) === todayISO();
+}
+
+function renderDashboard(){
+  const container = document.getElementById('dashboardContent');
+  container.innerHTML = '';
+
+  const scoped = currentUser.role === 'Manager'
+    ? data.filter(r => r.branch === currentUser.branch)
+    : data; // employees just see overall context; their own row is what matters
+
+  // Daily performance: only tickets actually worked on (assigned, status
+  // changed, or fields edited) TODAY count here — not the full history.
+  const today = scoped.filter(wasUpdatedToday);
+
+  const note = document.getElementById('dashboardDateNote');
+  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + ") — based on when each ticket was last worked on.";
+
+  if (today.length === 0){
+    container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
+    return;
+  }
+
+  /* ---- per-branch, per-employee ---- */
+  const byBranch = {};
+  today.forEach(r => {
+    const branch = r.branch || '(Unassigned)';
+    if (!byBranch[branch]) byBranch[branch] = {};
+    const emp = r.handled || '(Unassigned)';
+    if (!byBranch[branch][emp]) byBranch[branch][emp] = { worked:0, confirmed:0, lost:0 };
+    byBranch[branch][emp].worked++;
+    if (r.status === 'Confirmed') byBranch[branch][emp].confirmed++;
+    if (r.status === 'Lost') byBranch[branch][emp].lost++;
+  });
+
+  /* ---- per-client, branch-wide (not split by employee) ---- */
+  const byClient = {};
+  today.forEach(r => {
+    const client = r.client || '(Unknown client)';
+    if (!byClient[client]) byClient[client] = { requests:0, lost:0 };
+    byClient[client].requests++;
+    if (r.status === 'Lost') byClient[client].lost++;
+  });
+
+  const branches = Object.keys(byBranch).sort();
+  branches.forEach(branch => {
+    const card = document.createElement('div');
+    card.className = 'dash-card card';
+    const h3 = document.createElement('h3');
+    h3.textContent = branch + ' — by employee';
+    card.appendChild(h3);
+
+    const employees = Object.keys(byBranch[branch]).sort();
+    employees.forEach(emp => {
+      const stats = byBranch[branch][emp];
+      const row = document.createElement('div');
+      row.className = 'dash-row';
+      row.innerHTML = '<span>' + escapeHtml(emp) + '</span><span>Worked: <b>' + stats.worked + '</b> &nbsp; Confirmed: <b>' + stats.confirmed + '</b> &nbsp; Lost: <b>' + stats.lost + '</b></span>';
+      card.appendChild(row);
+    });
+
+    container.appendChild(card);
+  });
+
+  const clientCard = document.createElement('div');
+  clientCard.className = 'dash-card card';
+  const clientH3 = document.createElement('h3');
+  clientH3.textContent = 'By Client';
+  clientCard.appendChild(clientH3);
+
+  Object.keys(byClient).sort().forEach(client => {
+    const stats = byClient[client];
+    const row = document.createElement('div');
+    row.className = 'dash-row';
+    row.innerHTML = '<span>' + escapeHtml(client) + '</span><span>Requests: <b>' + stats.requests + '</b> &nbsp; Lost: <b>' + stats.lost + '</b></span>';
+    clientCard.appendChild(row);
+  });
+
+  container.appendChild(clientCard);
+}
+
+/* ---------------------------------------------------------------------
+   LOAD BRANCH EMPLOYEES (for the Handled By dropdown — used by both roles)
+   --------------------------------------------------------------------- */
+
+async function loadBranchEmployees(){
+  try{
+    const json = await apiGet({ action:'users' });
+    const users = json.users || [];
+
+    // Anyone with Role=Employee in the same branch is assignable, as before.
+    const branchEmployees = users.filter(u => u.role === 'Employee' && u.branch === currentUser.branch);
+
+    // The current user themselves should always be assignable too — this
+    // matters for managers specifically, since "Manager" isn't "Employee"
+    // in the Users tab, so without this they'd never appear as an option
+    // even though they're fully able to work tickets like anyone else.
+    const includesSelf = branchEmployees.some(u => u.name === currentUser.name);
+    window._branchEmployees = includesSelf
+      ? branchEmployees
+      : [{ name: currentUser.name, role: currentUser.role, branch: currentUser.branch }, ...branchEmployees];
+  }catch(err){
+    console.error('Could not load employee list:', err);
+    window._branchEmployees = [{ name: currentUser.name, role: currentUser.role, branch: currentUser.branch }];
+  }
+  populateAssignToDropdown();
+}
+
+/* ---------------------------------------------------------------------
+   INIT
+   --------------------------------------------------------------------- */
+
+window.onload = function(){
+  tryResumeSession();
+};
+</script>
+</body>
+</html>
