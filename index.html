@@ -111,7 +111,9 @@ td.lost-row{background:#ffebee}
 <button id="exportBtn" onclick="exportToExcel()">⬇ Export to Excel</button>
 <span id="syncStatus" class="sync-syncing">⏳ Connecting…</span>
 <button id="logoutBtn" onclick="logout()" style="float:right">Log Out</button>
+<!-- Hidden for now — uncomment to bring back the manager-only "Clear ALL records" button.
 <button id="clearAllBtn" onclick="clearAllFromSheet()" style="float:right;margin-right:8px" class="manager-only">🗑 Clear ALL records</button>
+-->
 </div>
 
 <div class="tabs">
@@ -1045,6 +1047,51 @@ function wasUpdatedToday(r){
   return String(r.lastUpdated).slice(0, 10) === todayISO();
 }
 
+/* Night shift runs 7:30 PM today through 6 AM tomorrow. A ticket counts for
+   a night-shift employee if its lastUpdated timestamp falls anywhere in
+   that window — which is why this can't just compare date strings like
+   wasUpdatedToday() does; it has to compare actual moments in time. */
+function isInNightShiftWindow(lastUpdatedStr, now){
+  if (!lastUpdatedStr) return false;
+  const updated = new Date(String(lastUpdatedStr).replace(' ', 'T'));
+  if (isNaN(updated.getTime())) return false;
+
+  now = now || new Date();
+
+  // The "current" night-shift window is the one whose 7:30 PM start is the
+  // most recent one at or before `now`. If it's currently between midnight
+  // and 6 AM, that start was YESTERDAY evening, not today's (today's 7:30 PM
+  // hasn't happened yet). If it's any other time, anchor to today's 7:30 PM
+  // (which correctly covers "not started yet" cases earlier in the day too —
+  // the window just won't contain anything until 7:30 PM actually arrives).
+  const windowStart = new Date(now);
+  windowStart.setHours(19, 30, 0, 0);
+  if (now.getHours() < 6) {
+    windowStart.setDate(windowStart.getDate() - 1);
+  }
+
+  const windowEnd = new Date(windowStart);
+  windowEnd.setDate(windowEnd.getDate() + 1);
+  windowEnd.setHours(6, 0, 0, 0);
+
+  return updated >= windowStart && updated <= windowEnd;
+}
+
+function shiftForEmployee(name){
+  const match = (window._branchEmployees || []).find(e => e.name === name);
+  return (match && match.shift) || 'Day';
+}
+
+/* The single source of truth for "does this ticket count as worked today",
+   per-record — Day-shift people use the normal calendar day, Night-shift
+   people use the 7:30PM-6AM window regardless of which calendar date that
+   spans. */
+function wasWorkedInRelevantWindow(r){
+  const handlerShift = shiftForEmployee(r.handled);
+  if (handlerShift === 'Night') return isInNightShiftWindow(r.lastUpdated);
+  return wasUpdatedToday(r);
+}
+
 function renderDashboard(){
   const container = document.getElementById('dashboardContent');
   container.innerHTML = '';
@@ -1054,11 +1101,13 @@ function renderDashboard(){
     : data; // employees just see overall context; their own row is what matters
 
   // Daily performance: only tickets actually worked on (assigned, status
-  // changed, or fields edited) TODAY count here — not the full history.
-  const today = scoped.filter(wasUpdatedToday);
+  // changed, or fields edited) count here — Day-shift staff use today's
+  // calendar date, Night-shift staff use the 7:30PM-6AM window instead,
+  // since their workday straddles midnight.
+  const today = scoped.filter(wasWorkedInRelevantWindow);
 
   const note = document.getElementById('dashboardDateNote');
-  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + ") — based on when each ticket was last worked on.";
+  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + ") — based on when each ticket was last worked on. Night-shift staff are counted on a 7:30 PM–6 AM window instead.";
 
   if (today.length === 0){
     container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
@@ -1142,10 +1191,10 @@ async function loadBranchEmployees(){
     const includesSelf = branchEmployees.some(u => u.name === currentUser.name);
     window._branchEmployees = includesSelf
       ? branchEmployees
-      : [{ name: currentUser.name, role: currentUser.role, branch: currentUser.branch }, ...branchEmployees];
+      : [{ name: currentUser.name, role: currentUser.role, branch: currentUser.branch, shift: currentUser.shift || 'Day' }, ...branchEmployees];
   }catch(err){
     console.error('Could not load employee list:', err);
-    window._branchEmployees = [{ name: currentUser.name, role: currentUser.role, branch: currentUser.branch }];
+    window._branchEmployees = [{ name: currentUser.name, role: currentUser.role, branch: currentUser.branch, shift: currentUser.shift || 'Day' }];
   }
   populateAssignToDropdown();
 }
