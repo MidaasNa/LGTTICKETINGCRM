@@ -1041,15 +1041,6 @@ function todayISO(){
   return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
 }
 
-/* "Worked" = new requests actually CREATED today, by the ticket's Date
-   field. Date has no time component (just YYYY-MM-DD), so this is always
-   a plain calendar-day comparison — a ticket created at 11 PM still has
-   today's date, there's no shift-window ambiguity to resolve here. */
-function wasCreatedToday(r){
-  if (!r.date) return false;
-  return String(r.date).slice(0, 10) === todayISO();
-}
-
 function wasUpdatedToday(r){
   if (!r.lastUpdated) return false;
   // lastUpdated is "YYYY-MM-DD HH:mm:ss" — just compare the date portion
@@ -1091,6 +1082,23 @@ function shiftForEmployee(name){
   return (match && match.shift) || 'Day';
 }
 
+/* "Worked" = new requests actually CREATED in the relevant window.
+   For Day-shift staff that's just "today" by calendar date (Date has no
+   time component, so a plain string compare is fine and unambiguous).
+   For Night-shift staff, the shift spans midnight, so a plain calendar-date
+   check on Date is wrong — a request logged at 9 PM on June 22 has
+   Date=2026-06-22 but is genuinely part of "tonight's" work for someone
+   on shift from 7:30 PM June 22 to 6 AM June 23. CreatedAt is stamped once,
+   at creation, and never changes again — unlike LastUpdated, which moves
+   every time the ticket is touched — so it's what night-shift staff are
+   checked against here, using the same window as Confirmed/Lost. */
+function wasCreatedToday(r){
+  const handlerShift = shiftForEmployee(r.handled);
+  if (handlerShift === 'Night') return isInNightShiftWindow(r.createdAt);
+  if (!r.date) return false;
+  return String(r.date).slice(0, 10) === todayISO();
+}
+
 /* "Worked this status-change happened in the employee's relevant window" —
    used for Confirmed/Lost, which are real timestamped events (LastUpdated).
    Day-shift staff use the normal calendar day; Night-shift staff use the
@@ -1117,7 +1125,7 @@ function renderDashboard(){
   const statusEventsToday = scoped.filter(statusChangedInRelevantWindow);
 
   const note = document.getElementById('dashboardDateNote');
-  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + "). Worked = new requests created today. Confirmed/Lost = status reached today, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for Confirmed/Lost instead.";
+  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + "). Worked = new requests created today. Confirmed/Lost = status reached today, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for all three instead of the calendar day.";
 
   if (newToday.length === 0 && statusEventsToday.length === 0){
     container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
