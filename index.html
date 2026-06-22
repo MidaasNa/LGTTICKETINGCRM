@@ -196,7 +196,7 @@ td.lost-row{background:#ffebee}
 /* =====================================================================
    CONFIG
    ===================================================================== */
-const API_URL = 'https://script.google.com/macros/s/AKfycbwYPrjm-D-Rx-kw6w5acPR9FKPqritVgl_Vyd1vK8GfD4CHPEfP1QrZ9wZMhDgMhB_IEg/exec';
+const API_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
 const AUTO_REFRESH_MS = 15000;
 
 const STATUS_FLOW = ['Pending','Waiting for Client Response','Confirmed'];
@@ -1041,6 +1041,15 @@ function todayISO(){
   return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
 }
 
+/* "Worked" = new requests actually CREATED today, by the ticket's Date
+   field. Date has no time component (just YYYY-MM-DD), so this is always
+   a plain calendar-day comparison — a ticket created at 11 PM still has
+   today's date, there's no shift-window ambiguity to resolve here. */
+function wasCreatedToday(r){
+  if (!r.date) return false;
+  return String(r.date).slice(0, 10) === todayISO();
+}
+
 function wasUpdatedToday(r){
   if (!r.lastUpdated) return false;
   // lastUpdated is "YYYY-MM-DD HH:mm:ss" — just compare the date portion
@@ -1082,11 +1091,11 @@ function shiftForEmployee(name){
   return (match && match.shift) || 'Day';
 }
 
-/* The single source of truth for "does this ticket count as worked today",
-   per-record — Day-shift people use the normal calendar day, Night-shift
-   people use the 7:30PM-6AM window regardless of which calendar date that
-   spans. */
-function wasWorkedInRelevantWindow(r){
+/* "Worked this status-change happened in the employee's relevant window" —
+   used for Confirmed/Lost, which are real timestamped events (LastUpdated).
+   Day-shift staff use the normal calendar day; Night-shift staff use the
+   7:30PM-6AM window regardless of which calendar date that spans. */
+function statusChangedInRelevantWindow(r){
   const handlerShift = shiftForEmployee(r.handled);
   if (handlerShift === 'Night') return isInNightShiftWindow(r.lastUpdated);
   return wasUpdatedToday(r);
@@ -1100,39 +1109,56 @@ function renderDashboard(){
     ? data.filter(r => r.branch === currentUser.branch)
     : data; // employees just see overall context; their own row is what matters
 
-  // Daily performance: only tickets actually worked on (assigned, status
-  // changed, or fields edited) count here — Day-shift staff use today's
-  // calendar date, Night-shift staff use the 7:30PM-6AM window instead,
-  // since their workday straddles midnight.
-  const today = scoped.filter(wasWorkedInRelevantWindow);
+  // Two distinct things, not one combined "activity" list:
+  //   - newToday: requests actually CREATED today (Worked)
+  //   - statusEventsToday: requests that hit Confirmed/Lost today, by
+  //     LastUpdated, regardless of when they were originally created
+  const newToday = scoped.filter(wasCreatedToday);
+  const statusEventsToday = scoped.filter(statusChangedInRelevantWindow);
 
   const note = document.getElementById('dashboardDateNote');
-  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + ") — based on when each ticket was last worked on. Night-shift staff are counted on a 7:30 PM–6 AM window instead.";
+  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + "). Worked = new requests created today. Confirmed/Lost = status reached today, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for Confirmed/Lost instead.";
 
-  if (today.length === 0){
+  if (newToday.length === 0 && statusEventsToday.length === 0){
     container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
     return;
   }
 
   /* ---- per-branch, per-employee ---- */
   const byBranch = {};
-  today.forEach(r => {
-    const branch = r.branch || '(Unassigned)';
+  function ensureEmpBucket(branch, emp){
     if (!byBranch[branch]) byBranch[branch] = {};
-    const emp = r.handled || '(Unassigned)';
     if (!byBranch[branch][emp]) byBranch[branch][emp] = { worked:0, confirmed:0, lost:0 };
-    byBranch[branch][emp].worked++;
-    if (r.status === 'Confirmed') byBranch[branch][emp].confirmed++;
-    if (r.status === 'Lost') byBranch[branch][emp].lost++;
+    return byBranch[branch][emp];
+  }
+
+  newToday.forEach(r => {
+    const branch = r.branch || '(Unassigned)';
+    const emp = r.handled || '(Unassigned)';
+    ensureEmpBucket(branch, emp).worked++;
+  });
+  statusEventsToday.forEach(r => {
+    const branch = r.branch || '(Unassigned)';
+    const emp = r.handled || '(Unassigned)';
+    const bucket = ensureEmpBucket(branch, emp);
+    if (r.status === 'Confirmed') bucket.confirmed++;
+    if (r.status === 'Lost') bucket.lost++;
   });
 
   /* ---- per-client, branch-wide (not split by employee) ---- */
   const byClient = {};
-  today.forEach(r => {
-    const client = r.client || '(Unknown client)';
+  function ensureClientBucket(client){
     if (!byClient[client]) byClient[client] = { requests:0, lost:0 };
-    byClient[client].requests++;
-    if (r.status === 'Lost') byClient[client].lost++;
+    return byClient[client];
+  }
+  newToday.forEach(r => {
+    const client = r.client || '(Unknown client)';
+    ensureClientBucket(client).requests++;
+  });
+  statusEventsToday.forEach(r => {
+    if (r.status !== 'Lost') return;
+    const client = r.client || '(Unknown client)';
+    ensureClientBucket(client).lost++;
   });
 
   const branches = Object.keys(byBranch).sort();
