@@ -1053,7 +1053,20 @@ function wasUpdatedToday(r){
    wasUpdatedToday() does; it has to compare actual moments in time. */
 function isInNightShiftWindow(lastUpdatedStr, now){
   if (!lastUpdatedStr) return false;
-  const updated = new Date(String(lastUpdatedStr).replace(' ', 'T'));
+
+  // Expected shape is "YYYY-MM-DD H:mm:ss" or "YYYY-MM-DD HH:mm:ss" — the
+  // hour may or may not be zero-padded (Sheets has been known to silently
+  // strip the leading zero, e.g. "1:20:22" instead of "01:20:22", if the
+  // cell ever got auto-converted into a real Date). New Date() on the
+  // un-padded ISO-style string ("2026-06-24T1:20:22") is not reliably
+  // parsed across engines, so parse the pieces directly instead of
+  // trusting the Date constructor with a string.
+  const m = String(lastUpdatedStr).trim().match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2}):(\d{2})/
+  );
+  if (!m) return false;
+  const [, y, mo, d, h, mi, s] = m;
+  const updated = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
   if (isNaN(updated.getTime())) return false;
 
   now = now || new Date();
