@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Travel Operations Ticketing - LGT Hotel Stays</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 body{font-family:Arial;background:#f4f6f9;margin:0;padding:20px}
 h1{background:#003366;color:white;padding:12px;border-radius:8px;margin-top:0}
@@ -55,6 +56,13 @@ th{background:#ffeb3b}
 .dash-card h3{margin:0 0 10px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px}
 .dash-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
 .dash-row b{color:#1b5e20}
+
+.chart-card{background:#fafbfc;border:1px solid #e3e8ef;border-radius:8px;padding:15px}
+.chart-card h3{margin:0 0 10px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px;font-size:15px}
+.chart-card .chart-wrap{position:relative;height:240px}
+.chart-card .chart-total{text-align:center;font-size:12px;color:#666;margin-top:8px}
+.chart-period-btn{background:#e3e8ef;border:none;padding:6px 14px;border-radius:6px;font-weight:bold;color:#003366;cursor:pointer;margin-left:6px}
+.chart-period-btn.active{background:#003366;color:white}
 
 .main-layout{display:flex;gap:15px;align-items:flex-start}
 .form-card{flex:1;min-width:0}
@@ -121,6 +129,7 @@ td.lost-row{background:#ffebee}
   <button class="tab-btn" data-tab="ticketsTab" onclick="switchTab('ticketsTab')">Tickets</button>
   <button class="tab-btn" data-tab="lostTab" onclick="switchTab('lostTab')">Lost</button>
   <button class="tab-btn manager-only" data-tab="dashboardTab" onclick="switchTab('dashboardTab')">📊 Dashboard</button>
+  <button class="tab-btn manager-only" data-tab="chartsTab" onclick="switchTab('chartsTab')">📈 Charts</button>
 </div>
 
 <!-- NEW REQUEST TAB -->
@@ -184,9 +193,25 @@ td.lost-row{background:#ffebee}
 <!-- DASHBOARD TAB -->
 <div id="dashboardTab" class="tab-panel">
 <div class="card">
-<h2 style="color:#003366;margin-top:0">Branch-wise Performance</h2>
+<h2 style="color:#003366;margin-top:0">Branch-wise Performance
+  <button id="dashboardExportBtn" onclick="exportDashboardToExcel()" style="float:right;font-size:13px">⬇ Download Dashboard</button>
+</h2>
 <p id="dashboardDateNote" style="color:#666;margin-top:-6px"></p>
 <div id="dashboardContent" class="dash-grid"></div>
+</div>
+</div>
+
+<!-- CHARTS TAB -->
+<div id="chartsTab" class="tab-panel">
+<div class="card">
+<h2 style="color:#003366;margin-top:0">Performance Charts
+  <span style="float:right">
+    <button id="chartsPeriodMonth" class="chart-period-btn active" onclick="setChartsPeriod('month')" style="font-size:13px">This Month</button>
+    <button id="chartsPeriodAll" class="chart-period-btn" onclick="setChartsPeriod('all')" style="font-size:13px">All-Time</button>
+  </span>
+</h2>
+<p id="chartsRangeNote" style="color:#666;margin-top:-6px"></p>
+<div id="chartsGrid" class="dash-grid"></div>
 </div>
 </div>
 
@@ -205,6 +230,8 @@ let data = [];
 let currentUser = null; // { name, role, branch }
 let isSyncing = false;
 let activeTab = 'newTab';
+let chartsPeriod = 'month'; // 'month' | 'all'
+let chartInstances = {}; // Chart.js instances, keyed by canvas id — destroyed/recreated on re-render
 
 /* ---------------------------------------------------------------------
    AUTH
@@ -245,8 +272,9 @@ function enterApp(){
   document.getElementById('app').style.display = 'block';
 
   const who = document.getElementById('whoami');
+  const branchLabel = currentUser.allBranchAccess ? 'All Branches' : currentUser.branch;
   who.innerHTML = '<b>' + escapeHtml(currentUser.name) + '</b> &middot; ' + escapeHtml(currentUser.role) +
-    (currentUser.branch ? ' &middot; ' + escapeHtml(currentUser.branch) : '');
+    (branchLabel ? ' &middot; ' + escapeHtml(branchLabel) : '');
 
   // manager-only controls
   document.querySelectorAll('.manager-only').forEach(el => {
@@ -329,7 +357,7 @@ function startAutoRefresh(){
    --------------------------------------------------------------------- */
 
 function switchTab(tabId){
-  if (tabId === 'dashboardTab' && currentUser.role !== 'Manager') return;
+  if ((tabId === 'dashboardTab' || tabId === 'chartsTab') && currentUser.role !== 'Manager') return;
   activeTab = tabId;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === tabId));
@@ -406,6 +434,7 @@ function populateAssignToDropdown(){
   sel.innerHTML = '';
 
   const employees = window._branchEmployees || [];
+  const spansBranches = employees.some(e => e.branch && e.branch !== currentUser.branch);
 
   if (currentUser.role === 'Manager') {
     const placeholder = document.createElement('option');
@@ -414,7 +443,9 @@ function populateAssignToDropdown(){
     employees.forEach(emp => {
       const o = document.createElement('option');
       o.value = emp.name;
-      o.textContent = emp.name === currentUser.name ? emp.name + ' (you)' : emp.name;
+      let label = emp.name === currentUser.name ? emp.name + ' (you)' : emp.name;
+      if (spansBranches && emp.branch) label += ' — ' + emp.branch;
+      o.textContent = label;
       sel.appendChild(o);
     });
   } else {
@@ -449,14 +480,21 @@ function statusClass(status){
 
 /* ---------------------------------------------------------------------
    VISIBILITY RULES
-   - Manager: sees all requests in their own branch (assigned or not),
-     plus unassigned Open requests (no branch yet) so they can route them.
+   - Manager with AllBranchAccess: sees every request, all branches —
+     reserved for the few people who need the full picture (set per-user
+     in the Users sheet, not implied by Role alone).
+   - Manager (branch-locked, the default): sees all requests in their own
+     branch (assigned or not), plus unassigned Open requests (no branch
+     yet) so they can route them.
    - Employee: sees Open requests in their branch (to self-assign) +
      anything already Handled By them.
    --------------------------------------------------------------------- */
 
 function visibleRecords(){
   if (!currentUser) return [];
+  if (currentUser.allBranchAccess) {
+    return data;
+  }
   if (currentUser.role === 'Manager') {
     return data.filter(r => !r.branch || r.branch === currentUser.branch);
   }
@@ -499,6 +537,7 @@ function render(){
   if (activeTab === 'ticketsTab') renderTicketsTable(visible, s);
   if (activeTab === 'lostTab') renderLostTable(visible, s);
   if (activeTab === 'dashboardTab' && currentUser.role === 'Manager') renderDashboard();
+  if (activeTab === 'chartsTab' && currentUser.role === 'Manager') renderCharts();
 }
 
 /* ---------------------------------------------------------------------
@@ -749,9 +788,11 @@ function buildTicketRow(r){
     const blank = document.createElement('option');
     blank.value = ''; blank.textContent = '(unassigned)';
     sel.appendChild(blank);
+    const spansBranches = employees.some(e => e.branch && e.branch !== currentUser.branch);
     employees.forEach(emp => {
       const o = document.createElement('option');
-      o.value = emp.name; o.textContent = emp.name;
+      o.value = emp.name;
+      o.textContent = (spansBranches && emp.branch) ? emp.name + ' — ' + emp.branch : emp.name;
       if (r.handled === emp.name) o.selected = true;
       sel.appendChild(o);
     });
@@ -966,7 +1007,17 @@ async function assignTicket(rowId, employeeName){
     return;
   }
   try{
-    await apiPost({ action:'assign', rowId:rowId, employeeName:employeeName.trim(), branch:currentUser.branch, actor:currentUser });
+    const rec = data.find(r => r.rowId === rowId);
+    // Send the TICKET's own branch, not the current user's — important for
+    // AllBranchAccess users assigning a ticket that already belongs to a
+    // different branch than their own. Only fall back to the assignee's
+    // branch when the ticket truly has none yet (the "route an unassigned
+    // request" case); the backend will only ever use this to fill in a
+    // blank Branch, never to overwrite an existing one.
+    const assigneeBranch = (window._allBranchEmployees || window._branchEmployees || [])
+      .find(e => e.name === employeeName.trim());
+    const branch = (rec && rec.branch) || (assigneeBranch && assigneeBranch.branch) || currentUser.branch;
+    await apiPost({ action:'assign', rowId:rowId, employeeName:employeeName.trim(), branch:branch, actor:currentUser });
     await refreshFromSheet(false);
   }catch(err){
     alert(err.message);
@@ -1122,30 +1173,22 @@ function statusChangedInRelevantWindow(r){
   return wasUpdatedToday(r);
 }
 
-function renderDashboard(){
-  const container = document.getElementById('dashboardContent');
-  container.innerHTML = '';
+/* Pure computation, shared by renderDashboard (on-screen) and
+   exportDashboardToExcel (download) so the two can never drift apart. */
+function computeDashboardStats(){
+  // AllBranchAccess Managers see every branch (the dashboard already
+  // groups by branch, so this just produces one card per branch instead
+  // of being filtered down to one). Everyone else stays branch-locked,
+  // same as before.
+  const scoped = currentUser.allBranchAccess
+    ? data
+    : (currentUser.role === 'Manager'
+        ? data.filter(r => r.branch === currentUser.branch)
+        : data); // employees just see overall context; their own row is what matters
 
-  const scoped = currentUser.role === 'Manager'
-    ? data.filter(r => r.branch === currentUser.branch)
-    : data; // employees just see overall context; their own row is what matters
-
-  // Two distinct things, not one combined "activity" list:
-  //   - newToday: requests actually CREATED today (Worked)
-  //   - statusEventsToday: requests that hit Confirmed/Lost today, by
-  //     LastUpdated, regardless of when they were originally created
   const newToday = scoped.filter(wasCreatedToday);
   const statusEventsToday = scoped.filter(statusChangedInRelevantWindow);
 
-  const note = document.getElementById('dashboardDateNote');
-  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + "). Worked = new requests created today. Confirmed/Lost = status reached today, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for all three instead of the calendar day.";
-
-  if (newToday.length === 0 && statusEventsToday.length === 0){
-    container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
-    return;
-  }
-
-  /* ---- per-branch, per-employee ---- */
   const byBranch = {};
   function ensureEmpBucket(branch, emp){
     if (!byBranch[branch]) byBranch[branch] = {};
@@ -1166,7 +1209,6 @@ function renderDashboard(){
     if (r.status === 'Lost') bucket.lost++;
   });
 
-  /* ---- per-client, branch-wide (not split by employee) ---- */
   const byClient = {};
   function ensureClientBucket(client){
     if (!byClient[client]) byClient[client] = { requests:0, lost:0 };
@@ -1182,6 +1224,28 @@ function renderDashboard(){
     ensureClientBucket(client).lost++;
   });
 
+  return { newToday, statusEventsToday, byBranch, byClient };
+}
+
+function renderDashboard(){
+  const container = document.getElementById('dashboardContent');
+  container.innerHTML = '';
+
+  // Two distinct things, not one combined "activity" list:
+  //   - newToday: requests actually CREATED today (Worked)
+  //   - statusEventsToday: requests that hit Confirmed/Lost today, by
+  //     LastUpdated, regardless of when they were originally created
+  const { newToday, statusEventsToday, byBranch, byClient } = computeDashboardStats();
+
+  const note = document.getElementById('dashboardDateNote');
+  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + "). Worked = new requests created today. Confirmed/Lost = status reached today, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for all three instead of the calendar day.";
+
+  if (newToday.length === 0 && statusEventsToday.length === 0){
+    container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
+    return;
+  }
+
+  /* ---- per-branch, per-employee ---- */
   const branches = Object.keys(byBranch).sort();
   branches.forEach(branch => {
     const card = document.createElement('div');
@@ -1220,6 +1284,191 @@ function renderDashboard(){
 }
 
 /* ---------------------------------------------------------------------
+   DASHBOARD EXPORT — same numbers shown on screen, as a downloadable
+   .xlsx with one sheet per branch plus a client-summary sheet.
+   --------------------------------------------------------------------- */
+
+function exportDashboardToExcel(){
+  if (typeof XLSX === 'undefined'){ alert('Excel library failed to load.'); return; }
+
+  const { newToday, statusEventsToday, byBranch, byClient } = computeDashboardStats();
+
+  if (newToday.length === 0 && statusEventsToday.length === 0){
+    alert('No activity yet today — nothing to export.');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const todayLabel = toDisplayDate(todayISO());
+
+  const branches = Object.keys(byBranch).sort();
+  branches.forEach(branch => {
+    const headers = ['Employee', 'Worked', 'Confirmed', 'Lost'];
+    const rows = Object.keys(byBranch[branch]).sort().map(emp => {
+      const s = byBranch[branch][emp];
+      return [emp, s.worked, s.confirmed, s.lost];
+    });
+    // Totals row
+    const totals = rows.reduce((acc, r) => [acc[0], acc[1]+r[1], acc[2]+r[2], acc[3]+r[3]], ['TOTAL', 0, 0, 0]);
+    rows.push(totals);
+
+    const ws = XLSX.utils.aoa_to_sheet([
+      [`Branch: ${branch} — Daily Performance (${todayLabel})`],
+      [],
+      headers,
+      ...rows
+    ]);
+    // Sheet names are capped at 31 chars and can't contain : \ / ? * [ ]
+    const safeName = branch.replace(/[:\\/?*[\]]/g, '').slice(0, 31) || 'Branch';
+    XLSX.utils.book_append_sheet(wb, ws, safeName);
+  });
+
+  const clientHeaders = ['Client', 'Requests', 'Lost'];
+  const clientRows = Object.keys(byClient).sort().map(client => {
+    const s = byClient[client];
+    return [client, s.requests, s.lost];
+  });
+  const clientWs = XLSX.utils.aoa_to_sheet([
+    [`By Client — Daily Performance (${todayLabel})`],
+    [],
+    clientHeaders,
+    ...clientRows
+  ]);
+  XLSX.utils.book_append_sheet(wb, clientWs, 'By Client');
+
+  const todayFile = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `LGT_Dashboard_${todayFile}.xlsx`);
+}
+
+/* ---------------------------------------------------------------------
+   CHARTS TAB — pie-chart metrics over a selectable period (this month
+   or all-time), as opposed to the Dashboard tab which is always "today".
+   --------------------------------------------------------------------- */
+
+function setChartsPeriod(period){
+  chartsPeriod = period;
+  document.getElementById('chartsPeriodMonth').classList.toggle('active', period === 'month');
+  document.getElementById('chartsPeriodAll').classList.toggle('active', period === 'all');
+  renderCharts();
+}
+
+function isInChartsPeriod(r){
+  if (!r.date) return false;
+  if (chartsPeriod === 'all') return true;
+  // "This month" — plain calendar-month comparison against today, using
+  // the Date field (no shift-window complexity here; that's a same-day
+  // concern specific to the daily Dashboard tab, not a monthly rollup).
+  const now = new Date();
+  const thisMonthPrefix = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  return String(r.date).slice(0, 7) === thisMonthPrefix;
+}
+
+function computeChartStats(){
+  // Same branch-scoping rule as the daily Dashboard: AllBranchAccess users
+  // see everything, branch-locked Managers see only their own branch.
+  const scoped = currentUser.allBranchAccess
+    ? data
+    : data.filter(r => r.branch === currentUser.branch);
+
+  const inPeriod = scoped.filter(isInChartsPeriod);
+
+  const byBranch = {};      // branch -> total request count
+  const byEmployee = {};    // employee -> total request count
+  let closed = 0, lost = 0; // bookings closed (Confirmed) vs Lost
+  let nightsConfirmed = 0;  // sum of Nights for Confirmed bookings
+  const nightsByBranch = {}; // branch -> nights confirmed
+
+  inPeriod.forEach(r => {
+    const branch = r.branch || '(Unassigned)';
+    const emp = r.handled || '(Unassigned)';
+    byBranch[branch] = (byBranch[branch] || 0) + 1;
+    byEmployee[emp] = (byEmployee[emp] || 0) + 1;
+
+    if (r.status === 'Confirmed') {
+      closed++;
+      const n = Number(r.nights || 0);
+      nightsConfirmed += n;
+      nightsByBranch[branch] = (nightsByBranch[branch] || 0) + n;
+    }
+    if (r.status === 'Lost') lost++;
+  });
+
+  return { inPeriod, byBranch, byEmployee, closed, lost, nightsConfirmed, nightsByBranch };
+}
+
+const CHART_COLORS = ['#003366','#1b5e20','#ffeb3b','#b71c1c','#6a1b9a','#ef6c00','#00838f','#5d4037','#827717','#37474f'];
+
+function destroyChart(id){
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+function makePieCard(grid, id, title, labelsAndValues, totalSuffix){
+  const card = document.createElement('div');
+  card.className = 'chart-card';
+  const total = labelsAndValues.reduce((sum, [, v]) => sum + v, 0);
+  card.innerHTML = `<h3>${escapeHtml(title)}</h3>
+    <div class="chart-wrap"><canvas id="${id}"></canvas></div>
+    <div class="chart-total">Total: ${total}${totalSuffix ? ' ' + escapeHtml(totalSuffix) : ''}</div>`;
+  grid.appendChild(card);
+
+  if (total === 0) {
+    card.querySelector('.chart-wrap').innerHTML = '<p style="color:#888;text-align:center;padding-top:90px">No data for this period.</p>';
+    return;
+  }
+
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext('2d');
+  chartInstances[id] = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: labelsAndValues.map(([label]) => label),
+      datasets: [{
+        data: labelsAndValues.map(([, v]) => v),
+        backgroundColor: labelsAndValues.map((_, i) => CHART_COLORS[i % CHART_COLORS.length])
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+function renderCharts(){
+  if (typeof Chart === 'undefined'){
+    document.getElementById('chartsGrid').innerHTML = '<p style="color:#b71c1c">Chart library failed to load — check your connection and reload.</p>';
+    return;
+  }
+
+  const stats = computeChartStats();
+  const grid = document.getElementById('chartsGrid');
+  grid.innerHTML = '';
+
+  const note = document.getElementById('chartsRangeNote');
+  const rangeLabel = chartsPeriod === 'month'
+    ? 'this calendar month'
+    : 'all time';
+  if (note) note.textContent = `Showing ${rangeLabel}` + (currentUser.allBranchAccess ? ' · all branches' : ` · ${currentUser.branch || ''} branch`);
+
+  if (stats.inPeriod.length === 0) {
+    grid.innerHTML = '<p style="color:#888">No requests in this period yet.</p>';
+    return;
+  }
+
+  makePieCard(grid, 'chartBranch', 'Branch-wise Performance',
+    Object.entries(stats.byBranch).sort((a,b) => b[1]-a[1]), 'requests');
+
+  makePieCard(grid, 'chartEmployee', 'Employee-wise Performance',
+    Object.entries(stats.byEmployee).sort((a,b) => b[1]-a[1]), 'requests');
+
+  makePieCard(grid, 'chartClosedLost', 'Bookings Closed vs Lost',
+    [['Confirmed', stats.closed], ['Lost', stats.lost]], 'bookings');
+
+  makePieCard(grid, 'chartNights', 'Nights Closed by Branch',
+    Object.entries(stats.nightsByBranch).sort((a,b) => b[1]-a[1]), 'nights');
+}
+
+/* ---------------------------------------------------------------------
    LOAD BRANCH EMPLOYEES (for the Handled By dropdown — used by both roles)
    --------------------------------------------------------------------- */
 
@@ -1228,13 +1477,24 @@ async function loadBranchEmployees(){
     const json = await apiGet({ action:'users' });
     const users = json.users || [];
 
-    // Anyone with Role=Employee in the same branch is assignable, as before.
-    const branchEmployees = users.filter(u => u.role === 'Employee' && u.branch === currentUser.branch);
+    // Always keep the FULL list around (used by assignTicket to look up
+    // which branch a chosen employee belongs to, regardless of whose
+    // dropdown they were picked from).
+    window._allBranchEmployees = users;
 
-    // The current user themselves should always be assignable too — this
-    // matters for managers specifically, since "Manager" isn't "Employee"
-    // in the Users tab, so without this they'd never appear as an option
-    // even though they're fully able to work tickets like anyone else.
+    // AllBranchAccess users get everyone, across every branch, so they can
+    // actually assign work outside their own branch. Everyone else stays
+    // limited to their own branch, as before. Either way, Managers are now
+    // included alongside Employees — assignable work isn't an
+    // Employee-only thing, a Manager can be handed a ticket too.
+    const branchEmployees = currentUser.allBranchAccess
+      ? users.filter(u => u.role === 'Employee' || u.role === 'Manager')
+      : users.filter(u => (u.role === 'Employee' || u.role === 'Manager') && u.branch === currentUser.branch);
+
+    // Safety net: make sure the current user always appears as an option
+    // even if something about the Users sheet data doesn't match them
+    // exactly (e.g. a branch mismatch) — they should always be able to
+    // assign work to themselves.
     const includesSelf = branchEmployees.some(u => u.name === currentUser.name);
     window._branchEmployees = includesSelf
       ? branchEmployees
