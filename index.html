@@ -17,6 +17,11 @@ button:hover{background:#e6e6e6}
 button:disabled{opacity:.5;cursor:default}
 table{width:100%;border-collapse:collapse;background:white;font-size:13px}
 th,td{border:1px solid #ddd;padding:6px;text-align:left}
+/* All free-text inputs show in uppercase as the user types — the JS layer
+   also enforces .toUpperCase() on the stored value so nothing slips through
+   in lowercase even if CSS is overridden (e.g. mobile browsers). Date inputs
+   are excluded since their format (22-June-26) must keep mixed case. */
+input[type="text"],input:not([type]),select.uppercase-sel{text-transform:uppercase}
 th{background:#ffeb3b}
 .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:15px}
 .stat{background:white;padding:12px;text-align:center;border-radius:8px}
@@ -84,6 +89,10 @@ table select{padding:4px;font-size:12px;width:100%}
 input.date-error{border:2px solid #e53935 !important;background:#fff5f5}
 table input.inline-handled{padding:4px;font-size:12px;width:100%;border:1px solid #ccc}
 td.lost-row{background:#ffebee}
+tr.overdue-row{background:#fff3f3}
+tr.overdue-row td{border-color:#ffcdd2}
+.overdue-badge{display:inline-block;background:#b71c1c;color:white;font-size:10px;font-weight:bold;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;white-space:nowrap}
+.btn-mark-lost{font-size:11px;padding:3px 7px;background:#b71c1c;color:white;border:none;border-radius:4px;cursor:pointer;margin-left:4px}
 
 @media (max-width:900px){
  .grid{grid-template-columns:repeat(2,1fr)}
@@ -106,6 +115,16 @@ td.lost-row{background:#ffebee}
 
 <!-- ============ MAIN APP (hidden until logged in) ============ -->
 <div id="app" style="display:none">
+
+<!-- OVERDUE NOTIFICATION BANNER — shown automatically when overdue
+     tickets are detected after a refresh. Stays visible until dismissed
+     or the user acts on it. Does NOT auto-move anything. -->
+<div id="overdueNotification" style="display:none;background:#b71c1c;color:white;padding:12px 18px;border-radius:0 0 8px 8px;margin-bottom:10px;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:18px">⚠️</span>
+  <span id="overdueNotifText" style="flex:1;font-weight:bold;font-size:14px"></span>
+  <button onclick="reviewOverdue()" style="background:white;color:#b71c1c;border:none;padding:6px 14px;border-radius:5px;font-weight:bold;cursor:pointer;font-size:13px">Review &amp; Mark Lost</button>
+  <button onclick="dismissOverdueNotif()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:13px">Dismiss</button>
+</div>
 
 <h1>Travel Operations Ticketing - LGT Hotel Stays
   <span id="whoami"></span>
@@ -275,6 +294,7 @@ function doLogin(){
 
 function logout(){
   currentUser = null;
+  _lastOverdueCount = -1; // reset so banner fires fresh on next login
   sessionStorage.removeItem('ticketingUser');
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'block';
@@ -431,8 +451,8 @@ async function saveRecord(){
 
   const record = {
     date: document.getElementById('date').value,
-    client: client.value,
-    tr: document.getElementById('tr').value,
+    client: client.value.toUpperCase().trim(),
+    tr: document.getElementById('tr').value.toUpperCase().trim(),
     priority: document.getElementById('priority').value,
     status: 'Pending',
     handled: assignedName,
@@ -763,6 +783,16 @@ function buildTicketRow(r){
   const tr = document.createElement('tr');
   tr.dataset.rowid = r.rowId || '';
 
+  // Detect overdue: check-in date has passed and ticket is not yet
+  // Confirmed or Lost. Used for row highlight + inline warning badge.
+  const today = new Date(); today.setHours(0,0,0,0);
+  const checkinDate = r.checkin ? new Date(r.checkin) : null;
+  const isOverdue = checkinDate && !isNaN(checkinDate) &&
+    checkinDate < today &&
+    !TERMINAL_STATUSES_CLIENT.includes(r.status);
+
+  if (isOverdue) tr.classList.add('overdue-row');
+
   // editable details directly in the table for whoever holds the ticket
   const canEditDetails = (r.handled === currentUser.name) || currentUser.role === 'Manager';
   // once a TR Number is assigned, only that person (or a manager) may touch
@@ -771,25 +801,25 @@ function buildTicketRow(r){
   const isLockedToSomeoneElse = r.handled && r.handled !== currentUser.name && currentUser.role !== 'Manager';
 
   const dateTd = document.createElement('td'); dateTd.textContent = r.date || ''; tr.appendChild(dateTd);
-  const clientTd = document.createElement('td'); clientTd.textContent = r.client || ''; tr.appendChild(clientTd);
-  const trTd = document.createElement('td'); trTd.textContent = r.tr || ''; tr.appendChild(trTd);
+  const clientTd = document.createElement('td'); clientTd.textContent = (r.client || '').toUpperCase(); tr.appendChild(clientTd);
+  const trTd = document.createElement('td'); trTd.textContent = (r.tr || '').toUpperCase(); tr.appendChild(trTd);
 
   const cityTd = document.createElement('td');
   if (canEditDetails) {
     const inp = document.createElement('input');
-    inp.value = r.city || ''; inp.placeholder = 'City'; inp.style.width = '80px'; inp.style.fontSize = '12px';
+    inp.value = (r.city || '').toUpperCase(); inp.placeholder = 'CITY'; inp.style.width = '80px'; inp.style.fontSize = '12px';
     inp.onchange = () => updateDetailField(r.rowId, 'city', inp.value);
     cityTd.appendChild(inp);
-  } else { cityTd.textContent = r.city || ''; }
+  } else { cityTd.textContent = (r.city || '').toUpperCase(); }
   tr.appendChild(cityTd);
 
   const countryTd = document.createElement('td');
   if (canEditDetails) {
     const inp = document.createElement('input');
-    inp.value = r.country || ''; inp.placeholder = 'Country'; inp.style.width = '90px'; inp.style.fontSize = '12px';
+    inp.value = (r.country || '').toUpperCase(); inp.placeholder = 'COUNTRY'; inp.style.width = '90px'; inp.style.fontSize = '12px';
     inp.onchange = () => updateDetailField(r.rowId, 'country', inp.value);
     countryTd.appendChild(inp);
-  } else { countryTd.textContent = r.country || ''; }
+  } else { countryTd.textContent = (r.country || '').toUpperCase(); }
   tr.appendChild(countryTd);
 
   const checkinTd = document.createElement('td');
@@ -799,6 +829,13 @@ function buildTicketRow(r){
     inp.onchange = () => handleDateFieldChange(inp, r.rowId, 'checkin');
     checkinTd.appendChild(inp);
   } else { checkinTd.textContent = toDisplayDate(r.checkin) || ''; }
+  if (isOverdue) {
+    const badge = document.createElement('span');
+    badge.className = 'overdue-badge';
+    badge.title = 'Check-in date has passed — consider marking this Lost';
+    badge.textContent = '⚠ Overdue';
+    checkinTd.appendChild(badge);
+  }
   tr.appendChild(checkinTd);
 
   const checkoutTd = document.createElement('td');
@@ -872,8 +909,26 @@ function buildTicketRow(r){
   delBtn.textContent = 'Delete';
   delBtn.onclick = () => deleteTicket(r.rowId);
   actionTd.appendChild(delBtn);
-  tr.appendChild(actionTd);
 
+  // Show a per-row "Mark Lost" button for overdue tickets so a Manager
+  // can act on individual tickets without going through the bulk prompt.
+  if (isOverdue && currentUser.role === 'Manager') {
+    const lostBtn = document.createElement('button');
+    lostBtn.className = 'btn-mark-lost';
+    lostBtn.textContent = 'Mark Lost';
+    lostBtn.title = 'Move this ticket to Lost immediately';
+    lostBtn.onclick = async () => {
+      const label = `${r.client || ''} — TR: ${r.tr || ''} — Check-in: ${toDisplayDate(r.checkin)}`;
+      if (!confirm(`Mark this ticket as Lost?\n\n${label}`)) return;
+      try {
+        await apiPost({ action:'updateStatus', rowId:r.rowId, status:'Lost', actor:currentUser });
+        await refreshFromSheet(false);
+      } catch(err) { alert('Error: ' + (err.message || err)); }
+    };
+    actionTd.appendChild(lostBtn);
+  }
+
+  tr.appendChild(actionTd);
   return tr;
 }
 
@@ -1016,6 +1071,14 @@ async function updateDetailField(rowId, field, value){
   const rec = data.find(r => r.rowId === rowId);
   if (!rec) return;
 
+  // Uppercase all free-text fields — dates (checkin/checkout) and
+  // system/numeric fields (nights, status, handled, branch) are excluded
+  // since their format or values must remain unchanged.
+  const TEXT_FIELDS = ['client','tr','city','country','vendor','bookingref','remarks'];
+  if (TEXT_FIELDS.includes(field) && typeof value === 'string') {
+    value = value.toUpperCase().trim();
+  }
+
   const fields = {};
   fields[field] = value;
   rec[field] = value; // update local cache immediately so nights calc below is accurate
@@ -1152,22 +1215,52 @@ function getOverdueTickets(){
   });
 }
 
-/* Called after every data refresh — updates the ⚠ Review Overdue badge
-   count so Managers immediately see if anything needs attention. */
+let _lastOverdueCount = -1; // -1 = never checked this session
+
+/* Called after every render — drives both the toolbar ⚠ button and the
+   red notification banner at the top. Banner appears automatically when
+   overdue tickets are detected or the count increases; stays hidden after
+   dismiss until count changes (so background polls don't re-spam it). */
 function updateOverdueBadge(){
-  const btn = document.getElementById('overdueBtn');
-  if (!btn || !currentUser || currentUser.role !== 'Manager') return;
-  const overdue = getOverdueTickets();
-  // Scope the count to what the current user can see
-  const scoped = overdue.filter(r =>
+  if (!currentUser || currentUser.role !== 'Manager') return;
+
+  const overdue = getOverdueTickets().filter(r =>
     currentUser.allBranchAccess || !r.branch || r.branch === currentUser.branch
   );
-  if (scoped.length > 0) {
-    btn.textContent = `⚠ Review Overdue (${scoped.length})`;
-    btn.style.display = '';
-  } else {
-    btn.style.display = 'none';
+  const count = overdue.length;
+
+  // Toolbar button
+  const btn = document.getElementById('overdueBtn');
+  if (btn) {
+    btn.textContent = `⚠ Review Overdue (${count})`;
+    btn.style.display = count > 0 ? '' : 'none';
   }
+
+  // Notification banner — auto-shows when count > 0 and is new/changed
+  const banner = document.getElementById('overdueNotification');
+  const text   = document.getElementById('overdueNotifText');
+  if (!banner || !text) return;
+
+  if (count > 0 && count !== _lastOverdueCount) {
+    const preview = overdue.slice(0, 3).map(r =>
+      `${r.client || '?'} (${r.tr || 'no TR'} · check-in ${toDisplayDate(r.checkin)})`
+    ).join(', ');
+    const more = count > 3 ? ` and ${count - 3} more` : '';
+    text.textContent = `${count} overdue ticket${count > 1 ? 's' : ''} with past check-in: ${preview}${more}`;
+    banner.style.display = 'flex';
+    _lastOverdueCount = count;
+  } else if (count === 0) {
+    banner.style.display = 'none';
+    _lastOverdueCount = 0;
+  }
+}
+
+function dismissOverdueNotif(){
+  const banner = document.getElementById('overdueNotification');
+  if (banner) banner.style.display = 'none';
+  // Keep _lastOverdueCount as-is so the banner doesn't reappear on
+  // the next background poll (same count). It will reappear only if
+  // a new overdue ticket shows up and the count increases.
 }
 
 async function reviewOverdue(){
