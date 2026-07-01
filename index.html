@@ -124,6 +124,7 @@ td.lost-row{background:#ffebee}
 <input id="search" placeholder="Search..." oninput="onSearchInput()" style="width:220px">
 <button id="refreshBtn" onclick="refreshFromSheet(true)">🔄 Refresh Now</button>
 <button id="exportBtn" onclick="exportToExcel()">⬇ Export to Excel</button>
+<button id="overdueBtn" class="manager-only" onclick="reviewOverdue()" style="background:#b71c1c;color:white;display:none">⚠ Review Overdue</button>
 <span id="syncStatus" class="sync-syncing">⏳ Connecting…</span>
 <button id="logoutBtn" onclick="logout()" style="float:right">Log Out</button>
 <!-- Hidden for now — uncomment to bring back the manager-only "Clear ALL records" button.
@@ -599,6 +600,8 @@ function render(){
   if (activeTab === 'lostTab') renderLostTable(visible, s);
   if (activeTab === 'dashboardTab' && currentUser.role === 'Manager') renderDashboard();
   if (activeTab === 'chartsTab' && currentUser.role === 'Manager') renderCharts();
+
+  updateOverdueBadge();
 }
 
 /* ---------------------------------------------------------------------
@@ -1128,6 +1131,77 @@ async function clearAllFromSheet(){
 /* ---------------------------------------------------------------------
    EXPORT
    --------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------
+   OVERDUE TICKET REVIEW — replaces the old silent auto-lost sweep.
+   Instead of automatically moving tickets to Lost on every refresh,
+   we detect overdue tickets client-side and show the Manager a list
+   to review before anything is changed.
+   --------------------------------------------------------------------- */
+
+const TERMINAL_STATUSES_CLIENT = ['Confirmed', 'Lost'];
+
+function getOverdueTickets(){
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return data.filter(r => {
+    if (TERMINAL_STATUSES_CLIENT.includes(r.status)) return false;
+    if (!r.checkin) return false;
+    const d = new Date(r.checkin);
+    return !isNaN(d.getTime()) && d < today;
+  });
+}
+
+/* Called after every data refresh — updates the ⚠ Review Overdue badge
+   count so Managers immediately see if anything needs attention. */
+function updateOverdueBadge(){
+  const btn = document.getElementById('overdueBtn');
+  if (!btn || !currentUser || currentUser.role !== 'Manager') return;
+  const overdue = getOverdueTickets();
+  // Scope the count to what the current user can see
+  const scoped = overdue.filter(r =>
+    currentUser.allBranchAccess || !r.branch || r.branch === currentUser.branch
+  );
+  if (scoped.length > 0) {
+    btn.textContent = `⚠ Review Overdue (${scoped.length})`;
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+async function reviewOverdue(){
+  const overdue = getOverdueTickets().filter(r =>
+    currentUser.allBranchAccess || !r.branch || r.branch === currentUser.branch
+  );
+
+  if (overdue.length === 0) {
+    alert('No overdue tickets found — all check-in dates are current.');
+    return;
+  }
+
+  // Build a readable list for the confirmation dialog
+  const lines = overdue.map(r =>
+    `• ${r.client || '(no client)'} — TR: ${r.tr || '(no TR)'} — Check-in: ${toDisplayDate(r.checkin)} — Status: ${r.status}`
+  ).join('\n');
+
+  const confirmed = window.confirm(
+    `The following ${overdue.length} ticket${overdue.length > 1 ? 's have' : ' has'} a check-in date that has already passed and ${overdue.length > 1 ? 'are' : 'is'} not yet Confirmed or Lost:\n\n` +
+    lines +
+    `\n\nMove all of these to Lost?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await apiPost({ action: 'markLost', actor: currentUser });
+    await refreshFromSheet(false);
+    const count = (res.moved || []).length;
+    alert(`Done — ${count} ticket${count !== 1 ? 's' : ''} moved to Lost.`);
+  } catch(err) {
+    alert('Error marking tickets as Lost: ' + (err.message || err));
+  }
+}
 
 function exportToExcel(){
   const visible = visibleRecords();
