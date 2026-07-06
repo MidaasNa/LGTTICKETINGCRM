@@ -155,6 +155,7 @@ tr.overdue-row td{border-color:#ffcdd2}
   <button class="tab-btn active" data-tab="newTab" onclick="switchTab('newTab')">+ New Request</button>
   <button class="tab-btn" data-tab="ticketsTab" onclick="switchTab('ticketsTab')">Tickets</button>
   <button class="tab-btn" data-tab="lostTab" onclick="switchTab('lostTab')">Lost</button>
+  <button class="tab-btn" data-tab="confirmedTab" onclick="switchTab('confirmedTab')">Confirmed</button>
   <button class="tab-btn manager-only" data-tab="dashboardTab" onclick="switchTab('dashboardTab')">📊 Dashboard</button>
   <button class="tab-btn manager-only" data-tab="chartsTab" onclick="switchTab('chartsTab')">📈 Charts</button>
 </div>
@@ -221,6 +222,24 @@ tr.overdue-row td{border-color:#ffcdd2}
 <tbody id="lostBody"></tbody>
 </table>
 <p id="lostEmpty" style="display:none;color:#888;text-align:center;padding:20px">No lost bookings. 🎉</p>
+</div>
+</div>
+
+<!-- CONFIRMED TAB -->
+<div id="confirmedTab" class="tab-panel">
+<p style="color:#666">Bookings that have been <b>Confirmed</b>. Delete a ticket individually below.</p>
+<div class="card" style="overflow-x:auto">
+<table>
+<thead>
+<tr>
+<th>Date</th><th>Client</th><th>TR Number</th><th>City</th><th>Country</th>
+<th>Check In</th><th>Check Out</th><th>Nights</th>
+<th>Status</th><th>Handled By</th><th>Branch</th><th>Action</th>
+</tr>
+</thead>
+<tbody id="confirmedBody"></tbody>
+</table>
+<p id="confirmedEmpty" style="display:none;color:#888;text-align:center;padding:20px">No confirmed bookings yet.</p>
 </div>
 </div>
 
@@ -618,6 +637,7 @@ function render(){
 
   if (activeTab === 'ticketsTab') renderTicketsTable(visible, s);
   if (activeTab === 'lostTab') renderLostTable(visible, s);
+  if (activeTab === 'confirmedTab') renderConfirmedTable(visible, s);
   if (activeTab === 'dashboardTab' && currentUser.role === 'Manager') renderDashboard();
   if (activeTab === 'chartsTab' && currentUser.role === 'Manager') renderCharts();
 
@@ -779,6 +799,63 @@ function buildLostRow(r){
   return tr;
 }
 
+/* ---------------------------------------------------------------------
+   CONFIRMED TABLE — read-only booking details (same as Lost tab), plus
+   a per-row Delete button so a Confirmed ticket can be cleaned up
+   individually once it's no longer needed.
+   --------------------------------------------------------------------- */
+
+function renderConfirmedTable(visible, searchTerm){
+  const tbody = document.getElementById('confirmedBody');
+  const emptyMsg = document.getElementById('confirmedEmpty');
+  tbody.innerHTML = '';
+
+  const rows = visible
+    .filter(r => r.status === 'Confirmed')
+    .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
+
+  emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
+  if (rows.length === 0) return;
+
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(buildConfirmedRow(r)));
+  tbody.appendChild(frag);
+}
+
+function buildConfirmedRow(r){
+  const tr = document.createElement('tr');
+  const cells = [r.date, r.client, r.tr, r.city, r.country, toDisplayDate(r.checkin), toDisplayDate(r.checkout), r.nights];
+  cells.forEach(val => {
+    const td = document.createElement('td');
+    td.textContent = val || '';
+    tr.appendChild(td);
+  });
+
+  const statusTd = document.createElement('td');
+  const badge = document.createElement('span');
+  badge.className = 'badge Confirmed';
+  badge.textContent = 'Confirmed';
+  statusTd.appendChild(badge);
+  tr.appendChild(statusTd);
+
+  const handledTd = document.createElement('td');
+  handledTd.textContent = r.handled || '';
+  tr.appendChild(handledTd);
+
+  const branchTd = document.createElement('td');
+  branchTd.textContent = r.branch || '';
+  tr.appendChild(branchTd);
+
+  const actionTd = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.textContent = 'Delete';
+  delBtn.onclick = () => deleteTicket(r.rowId);
+  actionTd.appendChild(delBtn);
+  tr.appendChild(actionTd);
+
+  return tr;
+}
+
 function buildTicketRow(r){
   const tr = document.createElement('tr');
   tr.dataset.rowid = r.rowId || '';
@@ -802,7 +879,19 @@ function buildTicketRow(r){
 
   const dateTd = document.createElement('td'); dateTd.textContent = r.date || ''; tr.appendChild(dateTd);
   const clientTd = document.createElement('td'); clientTd.textContent = (r.client || '').toUpperCase(); tr.appendChild(clientTd);
-  const trTd = document.createElement('td'); trTd.textContent = (r.tr || '').toUpperCase(); tr.appendChild(trTd);
+  const trTd = document.createElement('td');
+  trTd.textContent = (r.tr || '').toUpperCase();
+  const dupBtn = document.createElement('button');
+  dupBtn.textContent = '+';
+  dupBtn.title = 'Duplicate this row (same TR, new ticket)';
+  dupBtn.style.marginLeft = '6px';
+  dupBtn.style.fontSize = '13px';
+  dupBtn.style.fontWeight = 'bold';
+  dupBtn.style.padding = '1px 8px';
+  dupBtn.style.cursor = 'pointer';
+  dupBtn.onclick = () => duplicateTicket(r);
+  trTd.appendChild(dupBtn);
+  tr.appendChild(trTd);
 
   const cityTd = document.createElement('td');
   if (canEditDetails) {
@@ -1174,6 +1263,42 @@ async function deleteTicket(rowId){
     await refreshFromSheet(false);
   }catch(err){
     alert(err.message);
+  }
+}
+
+/* Duplicates an existing ticket into a brand-new row — same TR Number and
+   all other fields copied as-is, so a client's repeat request (e.g. the
+   same trip booked 4-5 times) doesn't need to be retyped from scratch.
+   The new row gets its own RowId/CreatedAt (via the normal 'create'
+   action), so it's independent going forward — editing or deleting the
+   copy never touches the original. Date is stamped to today since this
+   is a newly-created request, same as a fresh "+ New Request" submission. */
+async function duplicateTicket(r){
+  if (!confirm('Duplicate this ticket?\n\nClient: ' + (r.client || '') + '\nTR: ' + (r.tr || ''))) return;
+
+  const record = {
+    date: new Date().toISOString().split('T')[0],
+    client: r.client || '',
+    tr: r.tr || '',
+    city: r.city || '',
+    country: r.country || '',
+    vendor: r.vendor || '',
+    checkin: r.checkin || '',
+    checkout: r.checkout || '',
+    nights: r.nights || '',
+    bookingref: r.bookingref || '',
+    priority: r.priority || 'Normal',
+    status: r.status || 'Pending',
+    remarks: r.remarks || '',
+    handled: r.handled || '',
+    branch: r.branch || ''
+  };
+
+  try{
+    await apiPost({ action:'create', record:record, actor:currentUser });
+    await refreshFromSheet(false);
+  }catch(err){
+    alert('Could not duplicate ticket.\n\n' + (err.message || err));
   }
 }
 
