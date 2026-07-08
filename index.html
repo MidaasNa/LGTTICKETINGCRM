@@ -122,7 +122,7 @@ tr.overdue-row td{border-color:#ffcdd2}
 <div id="overdueNotification" style="display:none;background:#b71c1c;color:white;padding:12px 18px;border-radius:0 0 8px 8px;margin-bottom:10px;align-items:center;gap:12px;flex-wrap:wrap">
   <span style="font-size:18px">⚠️</span>
   <span id="overdueNotifText" style="flex:1;font-weight:bold;font-size:14px"></span>
-  <button onclick="reviewOverdue()" style="background:white;color:#b71c1c;border:none;padding:6px 14px;border-radius:5px;font-weight:bold;cursor:pointer;font-size:13px">Review &amp; Mark Lost</button>
+  <button id="overdueBannerBtn" onclick="reviewOverdue()" style="background:white;color:#b71c1c;border:none;padding:6px 14px;border-radius:5px;font-weight:bold;cursor:pointer;font-size:13px">Review &amp; Mark Lost</button>
   <button onclick="dismissOverdueNotif()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:13px">Dismiss</button>
 </div>
 
@@ -143,7 +143,7 @@ tr.overdue-row td{border-color:#ffcdd2}
 <input id="search" placeholder="Search..." oninput="onSearchInput()" style="width:220px">
 <button id="refreshBtn" onclick="refreshFromSheet(true)">🔄 Refresh Now</button>
 <button id="exportBtn" onclick="exportToExcel()">⬇ Export to Excel</button>
-<button id="overdueBtn" class="manager-only" onclick="reviewOverdue()" style="background:#b71c1c;color:white;display:none">⚠ Review Overdue</button>
+<button id="overdueBtn" onclick="reviewOverdue()" style="background:#b71c1c;color:white;display:none">⚠ Review Overdue</button>
 <span id="syncStatus" class="sync-syncing">⏳ Connecting…</span>
 <button id="logoutBtn" onclick="logout()" style="float:right">Log Out</button>
 <!-- Hidden for now — uncomment to bring back the manager-only "Clear ALL records" button.
@@ -156,6 +156,7 @@ tr.overdue-row td{border-color:#ffcdd2}
   <button class="tab-btn" data-tab="ticketsTab" onclick="switchTab('ticketsTab')">Tickets</button>
   <button class="tab-btn" data-tab="lostTab" onclick="switchTab('lostTab')">Lost</button>
   <button class="tab-btn" data-tab="confirmedTab" onclick="switchTab('confirmedTab')">Confirmed</button>
+  <button class="tab-btn" data-tab="reconfirmTab" onclick="switchTab('reconfirmTab')">📞 Reconfirmations</button>
   <button class="tab-btn manager-only" data-tab="dashboardTab" onclick="switchTab('dashboardTab')">📊 Dashboard</button>
   <button class="tab-btn manager-only" data-tab="chartsTab" onclick="switchTab('chartsTab')">📈 Charts</button>
 </div>
@@ -240,6 +241,40 @@ tr.overdue-row td{border-color:#ffcdd2}
 <tbody id="confirmedBody"></tbody>
 </table>
 <p id="confirmedEmpty" style="display:none;color:#888;text-align:center;padding:20px">No confirmed bookings yet.</p>
+</div>
+</div>
+
+<!-- RECONFIRMATIONS TAB -->
+<div id="reconfirmTab" class="tab-panel">
+<p style="color:#666">Confirmed bookings whose Check In is <b>tomorrow</b> appear here — call the hotel to reconfirm, then fill in all three fields below. A row turns green once Reconfirmed, Designation By, and the Hotel Confirmation Number are all filled in. Regardless of whether it was completed or not, a booking automatically drops off this list the day after its Check In date.</p>
+<div class="card" style="overflow-x:auto">
+<div id="reconfirmClientFilterContainer" style="position:relative;display:inline-block;margin-bottom:12px">
+  <button id="reconfirmClientFilterBtn" onclick="toggleReconfirmClientFilterPanel_()" style="padding:7px 14px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-size:13px">
+    <span>Filter by Client</span><span style="font-size:10px">▼</span>
+  </button>
+  <div id="reconfirmClientFilterPanel" style="display:none;position:absolute;top:110%;left:0;z-index:50;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);width:260px;padding:10px">
+    <input type="text" id="reconfirmClientFilterSearch" placeholder="Search clients..." style="width:100%;padding:6px;margin-bottom:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:4px;font-size:13px" oninput="renderReconfirmClientCheckboxList_(this.value)">
+    <label style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #eee;margin-bottom:6px;font-weight:bold;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="reconfirmClientFilterSelectAll" onchange="toggleReconfirmClientFilterSelectAll_(this.checked)"> Select All
+    </label>
+    <div id="reconfirmClientFilterList" style="max-height:180px;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+      <button onclick="cancelReconfirmClientFilter_()" style="padding:5px 12px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">Cancel</button>
+      <button onclick="applyReconfirmClientFilter_()" style="padding:5px 12px;border-radius:4px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px">OK</button>
+    </div>
+  </div>
+</div>
+<table>
+<thead>
+<tr>
+<th>Date</th><th>Client</th><th>TR Number</th><th>City</th>
+<th>Check In</th><th>Check Out</th><th>Handled By</th><th>Branch</th>
+<th>Reconfirmed</th><th>Designation By</th><th>Hotel Confirmation Number</th>
+</tr>
+</thead>
+<tbody id="reconfirmBody"></tbody>
+</table>
+<p id="reconfirmEmpty" style="display:none;color:#888;text-align:center;padding:20px">No bookings checking in tomorrow.</p>
 </div>
 </div>
 
@@ -638,6 +673,7 @@ function render(){
   if (activeTab === 'ticketsTab') renderTicketsTable(visible, s);
   if (activeTab === 'lostTab') renderLostTable(visible, s);
   if (activeTab === 'confirmedTab') renderConfirmedTable(visible, s);
+  if (activeTab === 'reconfirmTab') renderReconfirmTable(visible, s);
   if (activeTab === 'dashboardTab' && currentUser.role === 'Manager') renderDashboard();
   if (activeTab === 'chartsTab' && currentUser.role === 'Manager') renderCharts();
 
@@ -854,6 +890,229 @@ function buildConfirmedRow(r){
   tr.appendChild(actionTd);
 
   return tr;
+}
+
+/* ---------------------------------------------------------------------
+   RECONFIRMATIONS TAB — Confirmed bookings whose Check In is tomorrow.
+   Employees call the hotel to reconfirm and fill in three fields:
+   Reconfirmed (checkbox), Designation By (who reconfirmed), and Hotel
+   Confirmation Number. Once all three are filled, the row turns green.
+   The row drops off this tab automatically the day after Check In,
+   whether or not those fields were ever filled in — since the filter
+   below is purely date-based (checkin === tomorrow), a booking simply
+   stops matching once "tomorrow" moves past its Check In date.
+   --------------------------------------------------------------------- */
+
+let selectedReconfirmClients = new Set();       // committed filter — empty = show all clients
+let _reconfirmClientFilterAllNames = [];         // cached list of every client currently eligible
+let _reconfirmClientFilterTemp = new Set();      // working selection while the dropdown is open
+
+function renderReconfirmTable(visible, searchTerm){
+  const tbody = document.getElementById('reconfirmBody');
+  const emptyMsg = document.getElementById('reconfirmEmpty');
+  tbody.innerHTML = '';
+
+  const eligible = visible.filter(r => r.status === 'Confirmed' && isCheckInTomorrow_(r.checkin));
+  _reconfirmClientFilterAllNames = Array.from(new Set(eligible.map(r => r.client).filter(Boolean))).sort();
+  updateReconfirmClientFilterButtonLabel_();
+
+  const rows = eligible
+    .filter(r => selectedReconfirmClients.size === 0 || selectedReconfirmClients.has(r.client))
+    .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
+
+  emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
+  if (rows.length === 0) return;
+
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(buildReconfirmRow(r)));
+  tbody.appendChild(frag);
+}
+
+/* Excel-style client filter: a button opens a dropdown with a search box,
+   a "Select All" checkbox, and one checkbox per client. Changes only take
+   effect on OK — Cancel discards them — same as a spreadsheet's column
+   filter menu. */
+function toggleReconfirmClientFilterPanel_(){
+  const panel = document.getElementById('reconfirmClientFilterPanel');
+  if (!panel) return;
+
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  if (!opening) { panel.style.display = 'none'; return; }
+
+  // Seed the working selection from the committed filter — an empty
+  // committed set means "show all", so start with everyone checked.
+  _reconfirmClientFilterTemp = selectedReconfirmClients.size === 0
+    ? new Set(_reconfirmClientFilterAllNames)
+    : new Set(selectedReconfirmClients);
+
+  const search = document.getElementById('reconfirmClientFilterSearch');
+  if (search) search.value = '';
+  renderReconfirmClientCheckboxList_('');
+  panel.style.display = 'block';
+}
+
+function renderReconfirmClientCheckboxList_(searchTerm){
+  const list = document.getElementById('reconfirmClientFilterList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const term = (searchTerm || '').trim().toLowerCase();
+  _reconfirmClientFilterAllNames
+    .filter(name => !term || name.toLowerCase().includes(term))
+    .forEach(name => {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 2px;cursor:pointer;font-size:13px';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = _reconfirmClientFilterTemp.has(name);
+      cb.onchange = () => {
+        if (cb.checked) _reconfirmClientFilterTemp.add(name);
+        else _reconfirmClientFilterTemp.delete(name);
+        syncReconfirmSelectAllCheckbox_();
+      };
+      label.appendChild(cb);
+      label.append(' ' + name);
+      list.appendChild(label);
+    });
+
+  syncReconfirmSelectAllCheckbox_();
+}
+
+function syncReconfirmSelectAllCheckbox_(){
+  const selectAll = document.getElementById('reconfirmClientFilterSelectAll');
+  if (!selectAll) return;
+  selectAll.checked = _reconfirmClientFilterAllNames.length > 0
+    && _reconfirmClientFilterAllNames.every(name => _reconfirmClientFilterTemp.has(name));
+}
+
+function toggleReconfirmClientFilterSelectAll_(checked){
+  if (checked) _reconfirmClientFilterAllNames.forEach(n => _reconfirmClientFilterTemp.add(n));
+  else _reconfirmClientFilterTemp.clear();
+  const search = document.getElementById('reconfirmClientFilterSearch');
+  renderReconfirmClientCheckboxList_(search ? search.value : '');
+}
+
+function applyReconfirmClientFilter_(){
+  // Everyone checked is treated the same as "no filter" (empty set) — that
+  // way a brand-new client showing up later isn't silently excluded just
+  // because they didn't exist yet when this filter was last saved.
+  const allSelected = _reconfirmClientFilterAllNames.length > 0
+    && _reconfirmClientFilterAllNames.every(name => _reconfirmClientFilterTemp.has(name));
+  selectedReconfirmClients = allSelected ? new Set() : new Set(_reconfirmClientFilterTemp);
+
+  document.getElementById('reconfirmClientFilterPanel').style.display = 'none';
+  updateReconfirmClientFilterButtonLabel_();
+  render();
+}
+
+function cancelReconfirmClientFilter_(){
+  document.getElementById('reconfirmClientFilterPanel').style.display = 'none';
+}
+
+function updateReconfirmClientFilterButtonLabel_(){
+  const btn = document.getElementById('reconfirmClientFilterBtn');
+  if (!btn) return;
+  const span = btn.querySelector('span');
+  if (!span) return;
+  span.textContent = selectedReconfirmClients.size === 0
+    ? 'Filter by Client'
+    : `Filter by Client (${selectedReconfirmClients.size})`;
+}
+
+// Closes the dropdown when clicking anywhere outside it — standard
+// filter-menu behavior, same as Excel's column filter.
+document.addEventListener('click', function(e){
+  const container = document.getElementById('reconfirmClientFilterContainer');
+  const panel = document.getElementById('reconfirmClientFilterPanel');
+  if (!container || !panel || panel.style.display === 'none') return;
+  if (!container.contains(e.target)) panel.style.display = 'none';
+});
+
+function isCheckInTomorrow_(checkinStr){
+  if (!checkinStr) return false;
+  const d = new Date(checkinStr);
+  if (isNaN(d.getTime())) return false;
+  d.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date();
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return d.getTime() === tomorrow.getTime();
+}
+
+function isReconfirmRowComplete_(r){
+  return String(r.reconfirmed || '').trim() === 'Yes'
+    && String(r.reconfirmedBy || '').trim() !== ''
+    && String(r.hotelConfirmationNumber || '').trim() !== '';
+}
+
+function applyReconfirmRowColor_(r, trEl){
+  trEl.style.background = isReconfirmRowComplete_(r) ? '#e8f5e9' : '';
+}
+
+function buildReconfirmRow(r){
+  const tr = document.createElement('tr');
+
+  const cells = [r.date, r.client, r.tr, r.city, toDisplayDate(r.checkin), toDisplayDate(r.checkout), r.handled, r.branch];
+  cells.forEach(val => {
+    const td = document.createElement('td');
+    td.textContent = val || '';
+    tr.appendChild(td);
+  });
+
+  // Reconfirmed checkbox
+  const reconfirmedTd = document.createElement('td');
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = String(r.reconfirmed || '').trim() === 'Yes';
+  checkbox.onchange = () => setReconfirmField_(r, 'reconfirmed', checkbox.checked ? 'Yes' : 'No', tr);
+  reconfirmedTd.appendChild(checkbox);
+  tr.appendChild(reconfirmedTd);
+
+  // Designation By — who at the property/agency reconfirmed the booking
+  const designationTd = document.createElement('td');
+  const designationInput = document.createElement('input');
+  designationInput.type = 'text';
+  designationInput.value = r.reconfirmedBy || '';
+  designationInput.placeholder = 'Name / designation';
+  designationInput.style.width = '140px';
+  designationInput.onblur = () => {
+    if (designationInput.value.trim() !== String(r.reconfirmedBy || '').trim()) {
+      setReconfirmField_(r, 'reconfirmedBy', designationInput.value.trim(), tr);
+    }
+  };
+  designationTd.appendChild(designationInput);
+  tr.appendChild(designationTd);
+
+  // Hotel Confirmation Number
+  const hotelConfTd = document.createElement('td');
+  const hotelConfInput = document.createElement('input');
+  hotelConfInput.type = 'text';
+  hotelConfInput.value = r.hotelConfirmationNumber || '';
+  hotelConfInput.placeholder = 'Confirmation #';
+  hotelConfInput.style.width = '140px';
+  hotelConfInput.onblur = () => {
+    if (hotelConfInput.value.trim() !== String(r.hotelConfirmationNumber || '').trim()) {
+      setReconfirmField_(r, 'hotelConfirmationNumber', hotelConfInput.value.trim(), tr);
+    }
+  };
+  hotelConfTd.appendChild(hotelConfInput);
+  tr.appendChild(hotelConfTd);
+
+  applyReconfirmRowColor_(r, tr);
+  return tr;
+}
+
+async function setReconfirmField_(r, key, value, trEl){
+  try{
+    await apiPost({ action:'updateFields', rowId:r.rowId, fields:{ [key]: value }, actor:currentUser });
+    r[key] = value; // update local copy so the color check reflects it immediately
+    applyReconfirmRowColor_(r, trEl); // just recolor this one row, no full re-render needed
+  }catch(err){
+    alert('Could not save.\n\n' + (err.message || err));
+    render(); // re-sync back to last known-good state on failure
+  }
 }
 
 function buildTicketRow(r){
@@ -1347,23 +1606,34 @@ let _lastOverdueCount = -1; // -1 = never checked this session
    overdue tickets are detected or the count increases; stays hidden after
    dismiss until count changes (so background polls don't re-spam it). */
 function updateOverdueBadge(){
-  if (!currentUser || currentUser.role !== 'Manager') return;
+  if (!currentUser) return;
 
   const overdue = getOverdueTickets().filter(r =>
     currentUser.allBranchAccess || !r.branch || r.branch === currentUser.branch
   );
   const count = overdue.length;
 
+  // Only a few named people (Users sheet: CanMarkLost = 'Yes') can actually
+  // move tickets to Lost — everyone else still sees the same overdue list,
+  // just with a "Review" label instead of "Review & Mark Lost", and
+  // reviewOverdue() below shows it read-only for them. The server enforces
+  // this too (see 'markLost' in doPost), so this is UI framing, not the
+  // actual security boundary.
+  const canAct = !!currentUser.canMarkLost;
+  const label = canAct ? 'Review & Mark Lost' : 'Review Overdue';
+
   // Toolbar button
   const btn = document.getElementById('overdueBtn');
   if (btn) {
-    btn.textContent = `⚠ Review Overdue (${count})`;
+    btn.textContent = `⚠ ${label} (${count})`;
     btn.style.display = count > 0 ? '' : 'none';
   }
 
   // Notification banner — auto-shows when count > 0 and is new/changed
   const banner = document.getElementById('overdueNotification');
   const text   = document.getElementById('overdueNotifText');
+  const bannerBtn = document.getElementById('overdueBannerBtn');
+  if (bannerBtn) bannerBtn.textContent = label;
   if (!banner || !text) return;
 
   if (count > 0 && count !== _lastOverdueCount) {
@@ -1402,6 +1672,18 @@ async function reviewOverdue(){
   const lines = overdue.map(r =>
     `• ${r.client || '(no client)'} — TR: ${r.tr || '(no TR)'} — Check-in: ${toDisplayDate(r.checkin)} — Status: ${r.status}`
   ).join('\n');
+
+  if (!currentUser.canMarkLost) {
+    // Read-only for most people — they can see exactly what's overdue,
+    // but only specific team members (Users sheet: CanMarkLost = 'Yes')
+    // can actually move these to Lost.
+    alert(
+      `${overdue.length} ticket${overdue.length > 1 ? 's have' : ' has'} a check-in date that has already passed and ${overdue.length > 1 ? 'are' : 'is'} not yet Confirmed or Lost:\n\n` +
+      lines +
+      `\n\nOnly specific team members can mark these as Lost — please flag this to them if action is needed.`
+    );
+    return;
+  }
 
   const confirmed = window.confirm(
     `The following ${overdue.length} ticket${overdue.length > 1 ? 's have' : ' has'} a check-in date that has already passed and ${overdue.length > 1 ? 'are' : 'is'} not yet Confirmed or Lost:\n\n` +
