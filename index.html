@@ -126,6 +126,16 @@ tr.overdue-row td{border-color:#ffcdd2}
   <button onclick="dismissOverdueNotif()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:13px">Dismiss</button>
 </div>
 
+<!-- BLOCKED PAYMENT DEADLINE BANNER — shows starting 2 days before a
+     Blocked booking's payment deadline. Deliberately has NO dismiss
+     button — per spec, this only goes away once the booking is marked
+     Paid, from the Blocked tab. -->
+<div id="blockedDeadlineNotification" style="display:none;background:#e65100;color:white;padding:12px 18px;border-radius:0 0 8px 8px;margin-bottom:10px;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:18px">💳</span>
+  <span id="blockedDeadlineNotifText" style="flex:1;font-weight:bold;font-size:14px"></span>
+  <button onclick="switchTab('blockedTab')" style="background:white;color:#e65100;border:none;padding:6px 14px;border-radius:5px;font-weight:bold;cursor:pointer;font-size:13px">Go to Blocked Tab</button>
+</div>
+
 <h1>Travel Operations Ticketing - LGT Hotel Stays
   <span id="whoami"></span>
 </h1>
@@ -156,6 +166,7 @@ tr.overdue-row td{border-color:#ffcdd2}
   <button class="tab-btn" data-tab="ticketsTab" onclick="switchTab('ticketsTab')">Tickets</button>
   <button class="tab-btn" data-tab="lostTab" onclick="switchTab('lostTab')">Lost</button>
   <button class="tab-btn" data-tab="confirmedTab" onclick="switchTab('confirmedTab')">Confirmed</button>
+  <button class="tab-btn" data-tab="blockedTab" onclick="switchTab('blockedTab')">🔒 Blocked</button>
   <button class="tab-btn" data-tab="reconfirmTab" onclick="switchTab('reconfirmTab')">📞 Reconfirmations</button>
   <button class="tab-btn manager-only" data-tab="dashboardTab" onclick="switchTab('dashboardTab')">📊 Dashboard</button>
   <button class="tab-btn manager-only" data-tab="chartsTab" onclick="switchTab('chartsTab')">📈 Charts</button>
@@ -235,12 +246,32 @@ tr.overdue-row td{border-color:#ffcdd2}
 <tr>
 <th>Date</th><th>Client</th><th>TR Number</th><th>City</th><th>Country</th>
 <th>Check In</th><th>Check Out</th><th>Nights</th>
-<th>Status</th><th>Handled By</th><th>Branch</th><th>Action</th>
+<th>Status</th><th>Handled By</th><th>Branch</th>
+<th>Confirmation Number</th><th>Invoice Number</th><th>Action</th>
 </tr>
 </thead>
 <tbody id="confirmedBody"></tbody>
 </table>
 <p id="confirmedEmpty" style="display:none;color:#888;text-align:center;padding:20px">No confirmed bookings yet.</p>
+</div>
+</div>
+
+<!-- BLOCKED TAB -->
+<div id="blockedTab" class="tab-panel">
+<p style="color:#666">Every Confirmed booking is listed here, defaulted to <b>Paid</b>. Switch a booking to <b>Blocked</b> when the company card was used to guarantee/hold the room and still needs to be settled — pick a payment deadline, and a banner will appear across the app starting 2 days before that date. The banner only goes away once the booking is switched back to <b>Paid</b>.</p>
+<div class="card" style="overflow-x:auto">
+<table>
+<thead>
+<tr>
+<th>Date</th><th>Client</th><th>TR Number</th>
+<th style="max-width:80px">City</th><th style="max-width:80px">Country</th>
+<th>Check In</th><th>Handled By</th><th>Branch</th>
+<th>Payment Status</th><th>Deadline to Pay</th>
+</tr>
+</thead>
+<tbody id="blockedBody"></tbody>
+</table>
+<p id="blockedEmpty" style="display:none;color:#888;text-align:center;padding:20px">No confirmed bookings yet.</p>
 </div>
 </div>
 
@@ -673,11 +704,13 @@ function render(){
   if (activeTab === 'ticketsTab') renderTicketsTable(visible, s);
   if (activeTab === 'lostTab') renderLostTable(visible, s);
   if (activeTab === 'confirmedTab') renderConfirmedTable(visible, s);
+  if (activeTab === 'blockedTab') renderBlockedTable(visible, s);
   if (activeTab === 'reconfirmTab') renderReconfirmTable(visible, s);
   if (activeTab === 'dashboardTab' && currentUser.role === 'Manager') renderDashboard();
   if (activeTab === 'chartsTab' && currentUser.role === 'Manager') renderCharts();
 
   updateOverdueBadge();
+  updateBlockedDeadlineBanner();
 }
 
 /* ---------------------------------------------------------------------
@@ -882,6 +915,36 @@ function buildConfirmedRow(r){
   branchTd.textContent = r.branch || '';
   tr.appendChild(branchTd);
 
+  // Confirmation Number — editable, saved on blur
+  const confNumTd = document.createElement('td');
+  const confNumInput = document.createElement('input');
+  confNumInput.type = 'text';
+  confNumInput.value = r.confirmationNumber || '';
+  confNumInput.placeholder = 'Confirmation #';
+  confNumInput.style.width = '130px';
+  confNumInput.onblur = () => {
+    if (confNumInput.value.trim() !== String(r.confirmationNumber || '').trim()) {
+      setConfirmedField_(r, 'confirmationNumber', confNumInput.value.trim());
+    }
+  };
+  confNumTd.appendChild(confNumInput);
+  tr.appendChild(confNumTd);
+
+  // Invoice Number — editable, saved on blur
+  const invNumTd = document.createElement('td');
+  const invNumInput = document.createElement('input');
+  invNumInput.type = 'text';
+  invNumInput.value = r.invoiceNumber || '';
+  invNumInput.placeholder = 'Invoice #';
+  invNumInput.style.width = '130px';
+  invNumInput.onblur = () => {
+    if (invNumInput.value.trim() !== String(r.invoiceNumber || '').trim()) {
+      setConfirmedField_(r, 'invoiceNumber', invNumInput.value.trim());
+    }
+  };
+  invNumTd.appendChild(invNumInput);
+  tr.appendChild(invNumTd);
+
   const actionTd = document.createElement('td');
   const delBtn = document.createElement('button');
   delBtn.textContent = 'Delete';
@@ -890,6 +953,225 @@ function buildConfirmedRow(r){
   tr.appendChild(actionTd);
 
   return tr;
+}
+
+async function setConfirmedField_(r, key, value){
+  try{
+    await apiPost({ action:'updateFields', rowId:r.rowId, fields:{ [key]: value }, actor:currentUser });
+    r[key] = value;
+  }catch(err){
+    alert('Could not save.\n\n' + (err.message || err));
+    render();
+  }
+}
+
+/* ---------------------------------------------------------------------
+   BLOCKED TAB — every Confirmed booking, defaulted to Paid. Switching a
+   row to Blocked reveals a deadline date picker; the global banner (see
+   updateBlockedDeadlineBanner, hooked into render()) starts showing 2
+   days before that deadline and only stops once the row is switched
+   back to Paid — there's no dismiss button for it, by design.
+   --------------------------------------------------------------------- */
+
+function renderBlockedTable(visible, searchTerm){
+  const tbody = document.getElementById('blockedBody');
+  const emptyMsg = document.getElementById('blockedEmpty');
+
+  const rows = visible
+    .filter(r => r.status === 'Confirmed')
+    .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
+
+  emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
+
+  // Same fix as the focus-stealing bug elsewhere in this app: a background
+  // refresh (every 15s) used to rebuild every row from scratch, including
+  // whichever one someone was mid-interaction with — e.g. right after
+  // clicking Blocked but before that save round-trip finished, a refresh
+  // would rebuild the row from the server's still-"Paid" data and it would
+  // visibly snap back, cancelling an in-progress date-picker selection too.
+  // Now: whichever row currently has focus is left as the exact same DOM
+  // node, untouched, instead of being torn down and recreated.
+  const activeEl = document.activeElement;
+  const focusedTr = activeEl && tbody.contains(activeEl) ? activeEl.closest('tr') : null;
+  const focusedRowId = focusedTr ? focusedTr.dataset.rowId : null;
+
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => {
+    frag.appendChild(r.rowId === focusedRowId && focusedTr ? focusedTr : buildBlockedRow(r));
+  });
+
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+}
+
+function buildBlockedRow(r){
+  const tr = document.createElement('tr');
+  tr.dataset.rowId = r.rowId;
+
+  // City and Country capped narrower than the rest — these two rarely
+  // need much room, and shrinking them frees up horizontal space so the
+  // whole table is more likely to fit without side-scrolling.
+  const cellDefs = [
+    { val: r.date },
+    { val: r.client },
+    { val: r.tr },
+    { val: r.city, narrow: true },
+    { val: r.country, narrow: true },
+    { val: toDisplayDate(r.checkin) },
+    { val: r.handled },
+    { val: r.branch }
+  ];
+  cellDefs.forEach(c => {
+    const td = document.createElement('td');
+    td.textContent = c.val || '';
+    if (c.narrow) {
+      td.style.maxWidth = '80px';
+      td.style.whiteSpace = 'normal';
+      td.style.overflowWrap = 'break-word';
+    }
+    tr.appendChild(td);
+  });
+
+  const isBlocked = String(r.paymentStatus || '').trim() === 'Blocked';
+  const groupName = 'paystatus_' + r.rowId;
+
+  // Only the person who's Handled By this booking, or a Manager, can
+  // flip Blocked/Paid or change the deadline — mirrors the same
+  // TR-locking rule the backend already enforces on every field edit
+  // (checkTrLock_ in handleUpdateFields_), just reflected here so the
+  // controls are visibly disabled instead of silently failing on save.
+  const canChangePayment = currentUser.role === 'Manager'
+    || String(r.handled || '').trim().toLowerCase() === String(currentUser.name || '').trim().toLowerCase();
+
+  // Declared before the radios so their onclick handlers can toggle it
+  const deadlineInput = document.createElement('input');
+
+  const statusTd = document.createElement('td');
+
+  const blockedLabel = document.createElement('label');
+  blockedLabel.style.marginRight = '10px';
+  blockedLabel.style.cursor = canChangePayment ? 'pointer' : 'not-allowed';
+  const blockedRadio = document.createElement('input');
+  blockedRadio.type = 'radio';
+  blockedRadio.name = groupName;
+  blockedRadio.checked = isBlocked;
+  blockedRadio.disabled = !canChangePayment;
+  blockedRadio.onclick = () => {
+    deadlineInput.style.display = '';
+    setBlockedField_(r, 'paymentStatus', 'Blocked');
+  };
+  blockedLabel.appendChild(blockedRadio);
+  blockedLabel.append(' Blocked');
+
+  const paidLabel = document.createElement('label');
+  paidLabel.style.cursor = canChangePayment ? 'pointer' : 'not-allowed';
+  const paidRadio = document.createElement('input');
+  paidRadio.type = 'radio';
+  paidRadio.name = groupName;
+  paidRadio.checked = !isBlocked;
+  paidRadio.disabled = !canChangePayment;
+  paidRadio.onclick = () => {
+    deadlineInput.style.display = 'none';
+    setBlockedField_(r, 'paymentStatus', 'Paid');
+  };
+  paidLabel.appendChild(paidRadio);
+  paidLabel.append(' Paid');
+
+  statusTd.appendChild(blockedLabel);
+  statusTd.appendChild(paidLabel);
+  if (!canChangePayment) {
+    const lockNote = document.createElement('div');
+    lockNote.textContent = 'Only ' + (r.handled || 'the handler') + ' or a Manager can change this';
+    lockNote.style.cssText = 'font-size:11px;color:#999;margin-top:2px';
+    statusTd.appendChild(lockNote);
+  }
+  tr.appendChild(statusTd);
+
+  // Deadline to Pay — a plain date input, only meaningful (and only
+  // shown) while the row is set to Blocked. Can't be set later than the
+  // booking's own Check In date — paying after check-in defeats the
+  // point of a payment deadline for a blocked/guaranteed booking.
+  const deadlineTd = document.createElement('td');
+  deadlineInput.type = 'date';
+  deadlineInput.value = r.paymentDeadline || '';
+  deadlineInput.style.display = isBlocked ? '' : 'none';
+  deadlineInput.disabled = !canChangePayment;
+  if (r.checkin) deadlineInput.max = r.checkin; // greys out later dates directly in the calendar picker
+  deadlineInput.onchange = () => {
+    if (r.checkin && deadlineInput.value && deadlineInput.value > r.checkin) {
+      alert('Payment deadline cannot be after the Check In date (' + toDisplayDate(r.checkin) + ').');
+      deadlineInput.value = r.paymentDeadline || ''; // revert to last saved value
+      return;
+    }
+    setBlockedField_(r, 'paymentDeadline', deadlineInput.value);
+  };
+  deadlineTd.appendChild(deadlineInput);
+  tr.appendChild(deadlineTd);
+
+
+  return tr;
+}
+
+async function setBlockedField_(r, key, value){
+  try{
+    await apiPost({ action:'updateFields', rowId:r.rowId, fields:{ [key]: value }, actor:currentUser });
+    r[key] = value;
+    updateBlockedDeadlineBanner(); // reflect the change immediately rather than waiting for the next poll
+  }catch(err){
+    alert('Could not save.\n\n' + (err.message || err));
+    render();
+  }
+}
+
+/* Bookings that are Blocked, have a deadline set, and that deadline is
+   within 2 days (inclusive) — stays true even after the deadline has
+   fully passed, since the only way off this list is switching to Paid. */
+function getBlockedPaymentAlerts_(){
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return data.filter(r => {
+    if (r.status !== 'Confirmed') return false;
+    if (String(r.paymentStatus || '').trim() !== 'Blocked') return false;
+    if (!r.paymentDeadline) return false;
+
+    const deadline = new Date(r.paymentDeadline);
+    if (isNaN(deadline.getTime())) return false;
+    deadline.setHours(0, 0, 0, 0);
+
+    const twoDaysBefore = new Date(deadline);
+    twoDaysBefore.setDate(twoDaysBefore.getDate() - 2);
+
+    return today.getTime() >= twoDaysBefore.getTime();
+  });
+}
+
+/* No dismiss button on this banner (unlike the overdue one) — it simply
+   shows whenever there's at least one qualifying alert, and hides the
+   moment there are none. Called every render(), so it reflects state
+   immediately, no separate "last count" tracking needed. */
+function updateBlockedDeadlineBanner(){
+  if (!currentUser) return;
+
+  const alerts = getBlockedPaymentAlerts_().filter(r =>
+    currentUser.allBranchAccess || !r.branch || r.branch === currentUser.branch
+  );
+
+  const banner = document.getElementById('blockedDeadlineNotification');
+  const text = document.getElementById('blockedDeadlineNotifText');
+  if (!banner || !text) return;
+
+  if (alerts.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const preview = alerts.slice(0, 3).map(r =>
+    `${r.client || '?'} (${r.tr || 'no TR'} · pay by ${toDisplayDate(r.paymentDeadline)})`
+  ).join(', ');
+  const more = alerts.length > 3 ? ` and ${alerts.length - 3} more` : '';
+  text.textContent = `${alerts.length} blocked booking${alerts.length > 1 ? 's need' : ' needs'} payment soon: ${preview}${more}`;
+  banner.style.display = 'flex';
 }
 
 /* ---------------------------------------------------------------------
