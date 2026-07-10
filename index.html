@@ -241,10 +241,12 @@ tr.overdue-row td{border-color:#ffcdd2}
 <div id="confirmedTab" class="tab-panel">
 <p style="color:#666">Bookings that have been <b>Confirmed</b>. Delete a ticket individually below.</p>
 <div class="card" style="overflow-x:auto">
+<div id="confirmedFiltersContainer"></div>
 <table>
 <thead>
 <tr>
-<th>Date</th><th>Client</th><th>TR Number</th><th>City</th><th>Country</th>
+<th>Date</th><th>Client</th><th>TR Number</th>
+<th style="max-width:80px">City</th><th style="max-width:80px">Country</th>
 <th>Check In</th><th>Check Out</th><th>Nights</th>
 <th>Status</th><th>Handled By</th><th>Branch</th>
 <th>Confirmation Number</th><th>Invoice Number</th><th>Action</th>
@@ -258,8 +260,9 @@ tr.overdue-row td{border-color:#ffcdd2}
 
 <!-- BLOCKED TAB -->
 <div id="blockedTab" class="tab-panel">
-<p style="color:#666">Every Confirmed booking is listed here, defaulted to <b>Paid</b>. Switch a booking to <b>Blocked</b> when the company card was used to guarantee/hold the room and still needs to be settled — pick a payment deadline, and a banner will appear across the app starting 2 days before that date. The banner only goes away once the booking is switched back to <b>Paid</b>.</p>
+<p style="color:#666">Every Confirmed booking appears here with <b>nothing pre-selected</b> — pick <b>Blocked</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Paid</b> if it's already settled. Once a booking is marked <b>Paid</b>, it drops off this list for good.</p>
 <div class="card" style="overflow-x:auto">
+<div id="blockedFiltersContainer"></div>
 <table>
 <thead>
 <tr>
@@ -271,7 +274,7 @@ tr.overdue-row td{border-color:#ffcdd2}
 </thead>
 <tbody id="blockedBody"></tbody>
 </table>
-<p id="blockedEmpty" style="display:none;color:#888;text-align:center;padding:20px">No confirmed bookings yet.</p>
+<p id="blockedEmpty" style="display:none;color:#888;text-align:center;padding:20px">Nothing awaiting a payment decision right now.</p>
 </div>
 </div>
 
@@ -879,8 +882,15 @@ function renderConfirmedTable(visible, searchTerm){
   const emptyMsg = document.getElementById('confirmedEmpty');
   tbody.innerHTML = '';
 
-  const rows = visible
-    .filter(r => r.status === 'Confirmed')
+  const eligible = visible.filter(r => r.status === 'Confirmed');
+  updateFilterNames_('confirmed_client', eligible.map(r => r.client));
+  updateFilterNames_('confirmed_employee', eligible.map(r => r.handled));
+  const clientSet = getFilterSet_('confirmed_client');
+  const empSet = getFilterSet_('confirmed_employee');
+
+  const rows = eligible
+    .filter(r => clientSet.size === 0 || clientSet.has(r.client))
+    .filter(r => empSet.size === 0 || empSet.has(r.handled))
     .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
 
   emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
@@ -893,10 +903,27 @@ function renderConfirmedTable(visible, searchTerm){
 
 function buildConfirmedRow(r){
   const tr = document.createElement('tr');
-  const cells = [r.date, r.client, r.tr, r.city, r.country, toDisplayDate(r.checkin), toDisplayDate(r.checkout), r.nights];
-  cells.forEach(val => {
+  // City and Country capped narrower than the rest — same fix as the
+  // Blocked tab, so a long city/country name doesn't squeeze Check
+  // In/Check Out and everything after it into an unreadable width.
+  const cellDefs = [
+    { val: r.date },
+    { val: r.client },
+    { val: r.tr },
+    { val: r.city, narrow: true },
+    { val: r.country, narrow: true },
+    { val: toDisplayDate(r.checkin) },
+    { val: toDisplayDate(r.checkout) },
+    { val: r.nights }
+  ];
+  cellDefs.forEach(c => {
     const td = document.createElement('td');
-    td.textContent = val || '';
+    td.textContent = c.val || '';
+    if (c.narrow) {
+      td.style.maxWidth = '80px';
+      td.style.whiteSpace = 'normal';
+      td.style.overflowWrap = 'break-word';
+    }
     tr.appendChild(td);
   });
 
@@ -977,8 +1004,20 @@ function renderBlockedTable(visible, searchTerm){
   const tbody = document.getElementById('blockedBody');
   const emptyMsg = document.getElementById('blockedEmpty');
 
-  const rows = visible
-    .filter(r => r.status === 'Confirmed')
+  // Once a booking is marked Paid it's done — it's excluded here so it
+  // drops off this list for good (until/unless changed back some other
+  // way). Only undecided (blank) or Blocked bookings stay in view.
+  const eligible = visible.filter(r =>
+    r.status === 'Confirmed' && String(r.paymentStatus || '').trim() !== 'Paid'
+  );
+  updateFilterNames_('blocked_client', eligible.map(r => r.client));
+  updateFilterNames_('blocked_employee', eligible.map(r => r.handled));
+  const clientSet = getFilterSet_('blocked_client');
+  const empSet = getFilterSet_('blocked_employee');
+
+  const rows = eligible
+    .filter(r => clientSet.size === 0 || clientSet.has(r.client))
+    .filter(r => empSet.size === 0 || empSet.has(r.handled))
     .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
 
   emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
@@ -1032,15 +1071,24 @@ function buildBlockedRow(r){
     tr.appendChild(td);
   });
 
-  const isBlocked = String(r.paymentStatus || '').trim() === 'Blocked';
+  // Nothing is checked by default — status is blank until the employee
+  // explicitly picks Blocked or Paid. isPaid rows never actually reach
+  // this point in practice (renderBlockedTable filters them out), but
+  // kept explicit here for clarity/robustness.
+  const paymentStatusVal = String(r.paymentStatus || '').trim();
+  const isBlocked = paymentStatusVal === 'Blocked';
+  const isPaid = paymentStatusVal === 'Paid';
   const groupName = 'paystatus_' + r.rowId;
 
-  // Only the person who's Handled By this booking, or a Manager, can
-  // flip Blocked/Paid or change the deadline — mirrors the same
-  // TR-locking rule the backend already enforces on every field edit
-  // (checkTrLock_ in handleUpdateFields_), just reflected here so the
-  // controls are visibly disabled instead of silently failing on save.
-  const canChangePayment = currentUser.role === 'Manager'
+  // Only the person who's Handled By this booking, or someone explicitly
+  // flagged CanChangePaymentStatus='Yes' in the Users sheet, can flip
+  // Blocked/Paid or change the deadline. Deliberately NOT based on
+  // role === 'Manager' — since most/all accounts here are set to
+  // "Manager", that would grant this to everyone and defeat the point.
+  // The backend enforces this same rule independently (handleUpdateFields_
+  // in Code.gs); this is just reflected here so the controls are visibly
+  // disabled instead of silently failing on save.
+  const canChangePayment = !!currentUser.canChangePaymentStatus
     || String(r.handled || '').trim().toLowerCase() === String(currentUser.name || '').trim().toLowerCase();
 
   // Declared before the radios so their onclick handlers can toggle it
@@ -1048,9 +1096,9 @@ function buildBlockedRow(r){
 
   const statusTd = document.createElement('td');
 
+  // Blocked stacked above Paid — each on its own line, not side by side.
   const blockedLabel = document.createElement('label');
-  blockedLabel.style.marginRight = '10px';
-  blockedLabel.style.cursor = canChangePayment ? 'pointer' : 'not-allowed';
+  blockedLabel.style.cssText = 'display:block;cursor:' + (canChangePayment ? 'pointer' : 'not-allowed');
   const blockedRadio = document.createElement('input');
   blockedRadio.type = 'radio';
   blockedRadio.name = groupName;
@@ -1064,15 +1112,15 @@ function buildBlockedRow(r){
   blockedLabel.append(' Blocked');
 
   const paidLabel = document.createElement('label');
-  paidLabel.style.cursor = canChangePayment ? 'pointer' : 'not-allowed';
+  paidLabel.style.cssText = 'display:block;cursor:' + (canChangePayment ? 'pointer' : 'not-allowed');
   const paidRadio = document.createElement('input');
   paidRadio.type = 'radio';
   paidRadio.name = groupName;
-  paidRadio.checked = !isBlocked;
+  paidRadio.checked = isPaid;
   paidRadio.disabled = !canChangePayment;
   paidRadio.onclick = () => {
     deadlineInput.style.display = 'none';
-    setBlockedField_(r, 'paymentStatus', 'Paid');
+    setBlockedField_(r, 'paymentStatus', 'Paid'); // row drops off this list once this save completes
   };
   paidLabel.appendChild(paidRadio);
   paidLabel.append(' Paid');
@@ -1081,7 +1129,7 @@ function buildBlockedRow(r){
   statusTd.appendChild(paidLabel);
   if (!canChangePayment) {
     const lockNote = document.createElement('div');
-    lockNote.textContent = 'Only ' + (r.handled || 'the handler') + ' or a Manager can change this';
+    lockNote.textContent = 'Only ' + (r.handled || 'the handler') + ' or someone with payment access can change this';
     lockNote.style.cssText = 'font-size:11px;color:#999;margin-top:2px';
     statusTd.appendChild(lockNote);
   }
@@ -1117,6 +1165,7 @@ async function setBlockedField_(r, key, value){
     await apiPost({ action:'updateFields', rowId:r.rowId, fields:{ [key]: value }, actor:currentUser });
     r[key] = value;
     updateBlockedDeadlineBanner(); // reflect the change immediately rather than waiting for the next poll
+    render(); // Paid rows drop off this tab's list the moment this resolves; Blocked rows just re-render in place
   }catch(err){
     alert('Could not save.\n\n' + (err.message || err));
     render();
@@ -2445,10 +2494,168 @@ async function loadBranchEmployees(){
 }
 
 /* ---------------------------------------------------------------------
+   GENERIC EXCEL-STYLE MULTI-SELECT FILTER WIDGET
+   One reusable implementation, instantiated per "filterKey" (e.g.
+   "confirmed_client", "blocked_employee") — same search box / Select All
+   / checkbox list / Cancel-OK pattern as the Reconfirmations tab's client
+   filter, just generalized so it isn't duplicated four separate times.
+   --------------------------------------------------------------------- */
+
+const tabFilterSets_ = {};   // tabFilterSets_[filterKey] -> committed Set of selected values (empty = show all)
+const filterAllNames_ = {};  // filterAllNames_[filterKey] -> cached array of every available value
+const filterTemp_ = {};      // filterTemp_[filterKey]     -> working Set while its dropdown is open
+
+function getFilterSet_(filterKey){
+  if (!tabFilterSets_[filterKey]) tabFilterSets_[filterKey] = new Set();
+  return tabFilterSets_[filterKey];
+}
+
+function updateFilterNames_(filterKey, rawNames){
+  filterAllNames_[filterKey] = Array.from(new Set(rawNames.filter(Boolean))).sort();
+  updateFilterButtonLabel_(filterKey);
+}
+
+function buildFilterWidgetHtml_(filterKey, label){
+  return '<div id="filterContainer_' + filterKey + '" style="position:relative;display:inline-block;margin-right:10px;margin-bottom:12px">' +
+    '<button id="filterBtn_' + filterKey + '" data-base-label="' + label + '" onclick="toggleFilterPanel_(\'' + filterKey + '\')" ' +
+      'style="padding:7px 14px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-size:13px">' +
+      '<span>' + label + '</span><span style="font-size:10px">▼</span>' +
+    '</button>' +
+    '<div id="filterPanel_' + filterKey + '" style="display:none;position:absolute;top:110%;left:0;z-index:50;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);width:240px;padding:10px">' +
+      '<input type="text" id="filterSearch_' + filterKey + '" placeholder="Search..." ' +
+        'style="width:100%;padding:6px;margin-bottom:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:4px;font-size:13px" ' +
+        'oninput="renderFilterCheckboxList_(\'' + filterKey + '\', this.value)">' +
+      '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #eee;margin-bottom:6px;font-weight:bold;font-size:13px;cursor:pointer">' +
+        '<input type="checkbox" id="filterSelectAll_' + filterKey + '" onchange="toggleFilterSelectAll_(\'' + filterKey + '\', this.checked)"> Select All' +
+      '</label>' +
+      '<div id="filterList_' + filterKey + '" style="max-height:180px;overflow-y:auto"></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">' +
+        '<button onclick="cancelFilter_(\'' + filterKey + '\')" style="padding:5px 12px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">Cancel</button>' +
+        '<button onclick="applyFilter_(\'' + filterKey + '\')" style="padding:5px 12px;border-radius:4px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px">OK</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function toggleFilterPanel_(filterKey){
+  const panel = document.getElementById('filterPanel_' + filterKey);
+  if (!panel) return;
+
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  if (!opening) { panel.style.display = 'none'; return; }
+
+  const committed = getFilterSet_(filterKey);
+  const allNames = filterAllNames_[filterKey] || [];
+  filterTemp_[filterKey] = committed.size === 0 ? new Set(allNames) : new Set(committed);
+
+  const search = document.getElementById('filterSearch_' + filterKey);
+  if (search) search.value = '';
+  renderFilterCheckboxList_(filterKey, '');
+  panel.style.display = 'block';
+}
+
+function renderFilterCheckboxList_(filterKey, searchTerm){
+  const list = document.getElementById('filterList_' + filterKey);
+  if (!list) return;
+  list.innerHTML = '';
+
+  const term = (searchTerm || '').trim().toLowerCase();
+  const allNames = filterAllNames_[filterKey] || [];
+  const temp = filterTemp_[filterKey] || new Set();
+
+  allNames
+    .filter(name => !term || name.toLowerCase().includes(term))
+    .forEach(name => {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 2px;cursor:pointer;font-size:13px';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = temp.has(name);
+      cb.onchange = () => {
+        if (cb.checked) temp.add(name); else temp.delete(name);
+        syncFilterSelectAll_(filterKey);
+      };
+      label.appendChild(cb);
+      label.append(' ' + name);
+      list.appendChild(label);
+    });
+
+  syncFilterSelectAll_(filterKey);
+}
+
+function syncFilterSelectAll_(filterKey){
+  const selectAll = document.getElementById('filterSelectAll_' + filterKey);
+  if (!selectAll) return;
+  const allNames = filterAllNames_[filterKey] || [];
+  const temp = filterTemp_[filterKey] || new Set();
+  selectAll.checked = allNames.length > 0 && allNames.every(n => temp.has(n));
+}
+
+function toggleFilterSelectAll_(filterKey, checked){
+  const allNames = filterAllNames_[filterKey] || [];
+  const temp = filterTemp_[filterKey] || new Set();
+  if (checked) allNames.forEach(n => temp.add(n));
+  else temp.clear();
+  filterTemp_[filterKey] = temp;
+  const search = document.getElementById('filterSearch_' + filterKey);
+  renderFilterCheckboxList_(filterKey, search ? search.value : '');
+}
+
+function applyFilter_(filterKey){
+  const allNames = filterAllNames_[filterKey] || [];
+  const temp = filterTemp_[filterKey] || new Set();
+  // Everyone checked == "no filter" (empty set) — so a brand-new client
+  // or employee later isn't silently excluded just for not existing yet
+  // when this filter was last saved.
+  const allSelected = allNames.length > 0 && allNames.every(n => temp.has(n));
+  tabFilterSets_[filterKey] = allSelected ? new Set() : new Set(temp);
+
+  document.getElementById('filterPanel_' + filterKey).style.display = 'none';
+  updateFilterButtonLabel_(filterKey);
+  render();
+}
+
+function cancelFilter_(filterKey){
+  document.getElementById('filterPanel_' + filterKey).style.display = 'none';
+}
+
+function updateFilterButtonLabel_(filterKey){
+  const btn = document.getElementById('filterBtn_' + filterKey);
+  if (!btn) return;
+  const span = btn.querySelector('span');
+  if (!span) return;
+  const baseLabel = btn.dataset.baseLabel || 'Filter';
+  const set = getFilterSet_(filterKey);
+  span.textContent = set.size === 0 ? baseLabel : (baseLabel + ' (' + set.size + ')');
+}
+
+document.addEventListener('click', function(e){
+  Object.keys(filterAllNames_).forEach(filterKey => {
+    const container = document.getElementById('filterContainer_' + filterKey);
+    const panel = document.getElementById('filterPanel_' + filterKey);
+    if (!container || !panel || panel.style.display === 'none') return;
+    if (!container.contains(e.target)) panel.style.display = 'none';
+  });
+});
+
+/* ---------------------------------------------------------------------
    INIT
    --------------------------------------------------------------------- */
 
 window.onload = function(){
+  const confirmedFiltersEl = document.getElementById('confirmedFiltersContainer');
+  if (confirmedFiltersEl) {
+    confirmedFiltersEl.innerHTML =
+      buildFilterWidgetHtml_('confirmed_client', 'Filter by Client') +
+      buildFilterWidgetHtml_('confirmed_employee', 'Filter by Employee');
+  }
+  const blockedFiltersEl = document.getElementById('blockedFiltersContainer');
+  if (blockedFiltersEl) {
+    blockedFiltersEl.innerHTML =
+      buildFilterWidgetHtml_('blocked_client', 'Filter by Client') +
+      buildFilterWidgetHtml_('blocked_employee', 'Filter by Employee');
+  }
+
   tryResumeSession();
 };
 </script>
