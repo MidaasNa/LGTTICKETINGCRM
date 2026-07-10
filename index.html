@@ -267,9 +267,9 @@ tr.overdue-row td{border-color:#ffcdd2}
 <thead>
 <tr>
 <th>Date</th><th>Client</th><th>TR Number</th>
-<th style="max-width:80px">City</th><th style="max-width:80px">Country</th>
+<th style="max-width:80px">City</th>
 <th>Check In</th><th>Handled By</th><th>Branch</th>
-<th>Payment Status</th><th>Deadline to Pay</th>
+<th>Payment Status</th><th>Deadline to Pay</th><th>Confirmation Number</th>
 </tr>
 </thead>
 <tbody id="blockedBody"></tbody>
@@ -1007,8 +1007,14 @@ function renderBlockedTable(visible, searchTerm){
   // Once a booking is marked Paid it's done — it's excluded here so it
   // drops off this list for good (until/unless changed back some other
   // way). Only undecided (blank) or Blocked bookings stay in view.
+  // Also excluded: anything whose Check In date has already passed —
+  // Confirmed is a terminal status (never auto-swept to Lost), so a
+  // booking left undecided here could otherwise sit in this list
+  // indefinitely after the guest has already checked in.
   const eligible = visible.filter(r =>
-    r.status === 'Confirmed' && String(r.paymentStatus || '').trim() !== 'Paid'
+    r.status === 'Confirmed'
+    && String(r.paymentStatus || '').trim() !== 'Paid'
+    && !hasCheckInPassed_(r.checkin)
   );
   updateFilterNames_('blocked_client', eligible.map(r => r.client));
   updateFilterNames_('blocked_employee', eligible.map(r => r.handled));
@@ -1047,15 +1053,14 @@ function buildBlockedRow(r){
   const tr = document.createElement('tr');
   tr.dataset.rowId = r.rowId;
 
-  // City and Country capped narrower than the rest — these two rarely
-  // need much room, and shrinking them frees up horizontal space so the
-  // whole table is more likely to fit without side-scrolling.
+  // City capped narrower than the rest — rarely needs much room, and
+  // shrinking it frees up horizontal space so the whole table is more
+  // likely to fit without side-scrolling.
   const cellDefs = [
     { val: r.date },
     { val: r.client },
     { val: r.tr },
     { val: r.city, narrow: true },
-    { val: r.country, narrow: true },
     { val: toDisplayDate(r.checkin) },
     { val: r.handled },
     { val: r.branch }
@@ -1106,6 +1111,7 @@ function buildBlockedRow(r){
   blockedRadio.disabled = !canChangePayment;
   blockedRadio.onclick = () => {
     deadlineInput.style.display = '';
+    confNumInput.style.display = '';
     setBlockedField_(r, 'paymentStatus', 'Blocked');
     // If there's no deadline saved yet, commit the Check In date shown in
     // the field as the actual starting deadline — otherwise the displayed
@@ -1127,6 +1133,7 @@ function buildBlockedRow(r){
   paidRadio.disabled = !canChangePayment;
   paidRadio.onclick = () => {
     deadlineInput.style.display = 'none';
+    confNumInput.style.display = 'none';
     setBlockedField_(r, 'paymentStatus', 'Paid'); // row drops off this list once this save completes
   };
   paidLabel.appendChild(paidRadio);
@@ -1167,6 +1174,24 @@ function buildBlockedRow(r){
   deadlineTd.appendChild(deadlineInput);
   tr.appendChild(deadlineTd);
 
+  // Confirmation Number — appears right next to the deadline once Blocked
+  // is picked. Shares the same underlying field as the Confirmed tab's
+  // Confirmation Number, so it's one consistent value however it's edited.
+  const confNumTd = document.createElement('td');
+  const confNumInput = document.createElement('input');
+  confNumInput.type = 'text';
+  confNumInput.value = r.confirmationNumber || '';
+  confNumInput.placeholder = 'Confirmation #';
+  confNumInput.style.width = '130px';
+  confNumInput.style.display = isBlocked ? '' : 'none';
+  confNumInput.disabled = !canChangePayment;
+  confNumInput.onblur = () => {
+    if (confNumInput.value.trim() !== String(r.confirmationNumber || '').trim()) {
+      setBlockedField_(r, 'confirmationNumber', confNumInput.value.trim());
+    }
+  };
+  confNumTd.appendChild(confNumInput);
+  tr.appendChild(confNumTd);
 
   return tr;
 }
@@ -1369,6 +1394,21 @@ document.addEventListener('click', function(e){
   if (!container || !panel || panel.style.display === 'none') return;
   if (!container.contains(e.target)) panel.style.display = 'none';
 });
+
+/* True if the given Check In date is strictly before today — used to keep
+   the Blocked tab from showing bookings whose guest has already checked
+   in, since Confirmed is a terminal status that's never auto-swept away. */
+function hasCheckInPassed_(checkinStr){
+  if (!checkinStr) return false;
+  const d = new Date(checkinStr);
+  if (isNaN(d.getTime())) return false;
+  d.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return d.getTime() < today.getTime();
+}
 
 function isCheckInTomorrow_(checkinStr){
   if (!checkinStr) return false;
