@@ -1107,6 +1107,13 @@ function buildBlockedRow(r){
   blockedRadio.onclick = () => {
     deadlineInput.style.display = '';
     setBlockedField_(r, 'paymentStatus', 'Blocked');
+    // If there's no deadline saved yet, commit the Check In date shown in
+    // the field as the actual starting deadline — otherwise the displayed
+    // date would look selected without really being saved, which is
+    // confusing if the employee just clicks away without touching it.
+    if (!r.paymentDeadline && deadlineInput.value) {
+      setBlockedField_(r, 'paymentDeadline', deadlineInput.value);
+    }
   };
   blockedLabel.appendChild(blockedRadio);
   blockedLabel.append(' Blocked');
@@ -1139,16 +1146,20 @@ function buildBlockedRow(r){
   // shown) while the row is set to Blocked. Can't be set later than the
   // booking's own Check In date — paying after check-in defeats the
   // point of a payment deadline for a blocked/guaranteed booking.
+  // Defaults to the Check In date itself (not blank) so the native
+  // calendar picker opens right around the relevant month/day instead of
+  // today's — a Blocked booking is often months away, so an empty value
+  // would otherwise force scrolling through many months to get there.
   const deadlineTd = document.createElement('td');
   deadlineInput.type = 'date';
-  deadlineInput.value = r.paymentDeadline || '';
+  deadlineInput.value = r.paymentDeadline || r.checkin || '';
   deadlineInput.style.display = isBlocked ? '' : 'none';
   deadlineInput.disabled = !canChangePayment;
   if (r.checkin) deadlineInput.max = r.checkin; // greys out later dates directly in the calendar picker
   deadlineInput.onchange = () => {
     if (r.checkin && deadlineInput.value && deadlineInput.value > r.checkin) {
       alert('Payment deadline cannot be after the Check In date (' + toDisplayDate(r.checkin) + ').');
-      deadlineInput.value = r.paymentDeadline || ''; // revert to last saved value
+      deadlineInput.value = r.paymentDeadline || r.checkin || ''; // revert to last saved value
       return;
     }
     setBlockedField_(r, 'paymentDeadline', deadlineInput.value);
