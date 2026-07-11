@@ -94,6 +94,10 @@ tr.overdue-row td{border-color:#ffcdd2}
 .overdue-badge{display:inline-block;background:#b71c1c;color:white;font-size:10px;font-weight:bold;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;white-space:nowrap}
 .btn-mark-lost{font-size:11px;padding:3px 7px;background:#b71c1c;color:white;border:none;border-radius:4px;cursor:pointer;margin-left:4px}
 
+#dashboardPrevDayBtn:disabled, #dashboardNextDayBtn:disabled, #dashboardTodayBtn:disabled{
+  background:#ccc;color:#888;cursor:not-allowed
+}
+
 @media (max-width:900px){
  .grid{grid-template-columns:repeat(2,1fr)}
  .stats{grid-template-columns:repeat(3,1fr)}
@@ -319,10 +323,10 @@ tr.overdue-row td{border-color:#ffcdd2}
   <button id="dashboardExportBtn" onclick="exportDashboardToExcel()" style="float:right;font-size:13px">⬇ Download Dashboard</button>
 </h2>
 <div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px">
-  <button id="dashboardPrevDayBtn" onclick="dashboardPrevDay()" style="padding:6px 12px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">← Previous Day</button>
+  <button id="dashboardPrevDayBtn" onclick="dashboardPrevDay()" style="padding:6px 14px;border-radius:5px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">← Previous Day</button>
   <span id="dashboardDateLabel" style="font-weight:bold;color:#003366;min-width:110px;text-align:center"></span>
-  <button id="dashboardNextDayBtn" onclick="dashboardNextDay()" style="padding:6px 12px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">Next Day →</button>
-  <button id="dashboardTodayBtn" onclick="dashboardGoToday()" style="padding:6px 12px;border-radius:5px;border:1px solid #ccc;background:#f5f5f5;cursor:pointer;font-size:13px">Today</button>
+  <button id="dashboardNextDayBtn" onclick="dashboardNextDay()" style="padding:6px 14px;border-radius:5px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">Next Day →</button>
+  <button id="dashboardTodayBtn" onclick="dashboardGoToday()" style="padding:6px 14px;border-radius:5px;border:none;background:#ffeb3b;color:#003366;cursor:pointer;font-size:13px;font-weight:bold">Today</button>
 </div>
 <p id="dashboardDateNote" style="color:#666;margin-top:-2px"></p>
 <div id="dashboardContent" class="dash-grid"></div>
@@ -2198,16 +2202,12 @@ function statusChangedOnDate_(r, dateISO){
 
 /* Pure computation, shared by renderDashboard (on-screen) and
    exportDashboardToExcel (download) so the two can never drift apart. */
-const DASHBOARD_HISTORY_DAYS = 6; // how many days back navigation allows (today + 6 = a full week)
 let selectedDashboardDateISO = todayISO(); // which day's activity the Dashboard tab is currently showing
 
-function dashboardOldestAllowedDateISO_(){
-  return isoDateOffset_(todayISO(), -DASHBOARD_HISTORY_DAYS);
-}
-
 function dashboardPrevDay(){
-  const oldest = dashboardOldestAllowedDateISO_();
-  if (selectedDashboardDateISO <= oldest) return; // already at the week-back limit
+  // No back-limit — go as far back as there's data for. The data itself
+  // (not this navigation) is the only real boundary: a date with nothing
+  // recorded just shows "No activity on [date]" instead of being blocked.
   selectedDashboardDateISO = isoDateOffset_(selectedDashboardDateISO, -1);
   renderDashboard();
 }
@@ -2227,9 +2227,6 @@ function dashboardGoToday(){
 function updateDashboardDateControls_(){
   const label = document.getElementById('dashboardDateLabel');
   if (label) label.textContent = toDisplayDate(selectedDashboardDateISO);
-
-  const prevBtn = document.getElementById('dashboardPrevDayBtn');
-  if (prevBtn) prevBtn.disabled = selectedDashboardDateISO <= dashboardOldestAllowedDateISO_();
 
   const nextBtn = document.getElementById('dashboardNextDayBtn');
   if (nextBtn) nextBtn.disabled = selectedDashboardDateISO >= todayISO();
