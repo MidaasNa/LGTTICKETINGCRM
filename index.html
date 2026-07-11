@@ -318,7 +318,13 @@ tr.overdue-row td{border-color:#ffcdd2}
 <h2 style="color:#003366;margin-top:0">Branch-wise Performance
   <button id="dashboardExportBtn" onclick="exportDashboardToExcel()" style="float:right;font-size:13px">⬇ Download Dashboard</button>
 </h2>
-<p id="dashboardDateNote" style="color:#666;margin-top:-6px"></p>
+<div style="display:flex;align-items:center;gap:10px;margin:8px 0 4px">
+  <button id="dashboardPrevDayBtn" onclick="dashboardPrevDay()" style="padding:6px 12px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">← Previous Day</button>
+  <span id="dashboardDateLabel" style="font-weight:bold;color:#003366;min-width:110px;text-align:center"></span>
+  <button id="dashboardNextDayBtn" onclick="dashboardNextDay()" style="padding:6px 12px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">Next Day →</button>
+  <button id="dashboardTodayBtn" onclick="dashboardGoToday()" style="padding:6px 12px;border-radius:5px;border:1px solid #ccc;background:#f5f5f5;cursor:pointer;font-size:13px">Today</button>
+</div>
+<p id="dashboardDateNote" style="color:#666;margin-top:-2px"></p>
 <div id="dashboardContent" class="dash-grid"></div>
 </div>
 </div>
@@ -2109,17 +2115,30 @@ function todayISO(){
   return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
 }
 
-function wasUpdatedToday(r){
-  if (!r.lastUpdated) return false;
-  // lastUpdated is "YYYY-MM-DD HH:mm:ss" — just compare the date portion
-  return String(r.lastUpdated).slice(0, 10) === todayISO();
+/* Shifts a yyyy-MM-dd string by N days (negative goes backward) and
+   returns the result in the same format. Used by the Dashboard's day
+   navigation so it can step through real calendar dates without any
+   timezone drift creeping in from repeated Date object round-trips. */
+function isoDateOffset_(baseISO, deltaDays){
+  const [y, mo, d] = baseISO.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d);
+  dt.setDate(dt.getDate() + deltaDays);
+  return dt.getFullYear() + '-' + pad2(dt.getMonth()+1) + '-' + pad2(dt.getDate());
 }
 
-/* Night shift runs 7:30 PM today through 6 AM tomorrow. A ticket counts for
-   a night-shift employee if its lastUpdated timestamp falls anywhere in
-   that window — which is why this can't just compare date strings like
-   wasUpdatedToday() does; it has to compare actual moments in time. */
-function isInNightShiftWindow(lastUpdatedStr, now){
+function wasUpdatedOnDate_(r, dateISO){
+  if (!r.lastUpdated) return false;
+  // lastUpdated is "YYYY-MM-DD HH:mm:ss" — just compare the date portion
+  return String(r.lastUpdated).slice(0, 10) === dateISO;
+}
+
+/* Night shift runs 7:30 PM through 6 AM the next calendar day. A ticket
+   counts for a night-shift employee if its lastUpdated timestamp falls
+   anywhere in the window ANCHORED TO dateISO's evening — which is why
+   this can't just compare date strings; it has to compare actual moments
+   in time against a specific date's 7:30 PM–6 AM span, not necessarily
+   "tonight's". */
+function isInNightShiftWindowForDate_(lastUpdatedStr, dateISO){
   if (!lastUpdatedStr) return false;
 
   // Expected shape is "YYYY-MM-DD H:mm:ss" or "YYYY-MM-DD HH:mm:ss" — the
@@ -2137,20 +2156,8 @@ function isInNightShiftWindow(lastUpdatedStr, now){
   const updated = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
   if (isNaN(updated.getTime())) return false;
 
-  now = now || new Date();
-
-  // The "current" night-shift window is the one whose 7:30 PM start is the
-  // most recent one at or before `now`. If it's currently between midnight
-  // and 6 AM, that start was YESTERDAY evening, not today's (today's 7:30 PM
-  // hasn't happened yet). If it's any other time, anchor to today's 7:30 PM
-  // (which correctly covers "not started yet" cases earlier in the day too —
-  // the window just won't contain anything until 7:30 PM actually arrives).
-  const windowStart = new Date(now);
-  windowStart.setHours(19, 30, 0, 0);
-  if (now.getHours() < 6) {
-    windowStart.setDate(windowStart.getDate() - 1);
-  }
-
+  const [dy, dmo, dd] = dateISO.split('-').map(Number);
+  const windowStart = new Date(dy, dmo - 1, dd, 19, 30, 0, 0);
   const windowEnd = new Date(windowStart);
   windowEnd.setDate(windowEnd.getDate() + 1);
   windowEnd.setHours(6, 0, 0, 0);
@@ -2163,36 +2170,77 @@ function shiftForEmployee(name){
   return (match && match.shift) || 'Day';
 }
 
-/* "Worked" = new requests actually CREATED in the relevant window.
-   For Day-shift staff that's just "today" by calendar date (Date has no
-   time component, so a plain string compare is fine and unambiguous).
-   For Night-shift staff, the shift spans midnight, so a plain calendar-date
-   check on Date is wrong — a request logged at 9 PM on June 22 has
-   Date=2026-06-22 but is genuinely part of "tonight's" work for someone
-   on shift from 7:30 PM June 22 to 6 AM June 23. CreatedAt is stamped once,
-   at creation, and never changes again — unlike LastUpdated, which moves
-   every time the ticket is touched — so it's what night-shift staff are
-   checked against here, using the same window as Confirmed/Lost. */
-function wasCreatedToday(r){
+/* "Worked" = new requests actually CREATED on dateISO. For Day-shift staff
+   that's just a plain calendar-date compare on Date. For Night-shift
+   staff, the shift spans midnight, so a plain calendar-date check on Date
+   is wrong — a request logged at 9 PM on June 22 has Date=2026-06-22 but
+   is genuinely part of "that night's" work for someone on shift from
+   7:30 PM June 22 to 6 AM June 23. CreatedAt is stamped once, at creation,
+   and never changes again — unlike LastUpdated, which moves every time
+   the ticket is touched — so it's what night-shift staff are checked
+   against here, using the same window as Confirmed/Lost. */
+function wasCreatedOnDate_(r, dateISO){
   const handlerShift = shiftForEmployee(r.handled);
-  if (handlerShift === 'Night') return isInNightShiftWindow(r.createdAt);
+  if (handlerShift === 'Night') return isInNightShiftWindowForDate_(r.createdAt, dateISO);
   if (!r.date) return false;
-  return String(r.date).slice(0, 10) === todayISO();
+  return String(r.date).slice(0, 10) === dateISO;
 }
 
-/* "Worked this status-change happened in the employee's relevant window" —
-   used for Confirmed/Lost, which are real timestamped events (LastUpdated).
-   Day-shift staff use the normal calendar day; Night-shift staff use the
-   7:30PM-6AM window regardless of which calendar date that spans. */
-function statusChangedInRelevantWindow(r){
+/* "This status-change happened in the employee's relevant window for
+   dateISO" — used for Confirmed/Lost, which are real timestamped events
+   (LastUpdated). Day-shift staff use the normal calendar day; Night-shift
+   staff use the 7:30PM-6AM window anchored to dateISO's evening. */
+function statusChangedOnDate_(r, dateISO){
   const handlerShift = shiftForEmployee(r.handled);
-  if (handlerShift === 'Night') return isInNightShiftWindow(r.lastUpdated);
-  return wasUpdatedToday(r);
+  if (handlerShift === 'Night') return isInNightShiftWindowForDate_(r.lastUpdated, dateISO);
+  return wasUpdatedOnDate_(r, dateISO);
 }
 
 /* Pure computation, shared by renderDashboard (on-screen) and
    exportDashboardToExcel (download) so the two can never drift apart. */
-function computeDashboardStats(){
+const DASHBOARD_HISTORY_DAYS = 6; // how many days back navigation allows (today + 6 = a full week)
+let selectedDashboardDateISO = todayISO(); // which day's activity the Dashboard tab is currently showing
+
+function dashboardOldestAllowedDateISO_(){
+  return isoDateOffset_(todayISO(), -DASHBOARD_HISTORY_DAYS);
+}
+
+function dashboardPrevDay(){
+  const oldest = dashboardOldestAllowedDateISO_();
+  if (selectedDashboardDateISO <= oldest) return; // already at the week-back limit
+  selectedDashboardDateISO = isoDateOffset_(selectedDashboardDateISO, -1);
+  renderDashboard();
+}
+
+function dashboardNextDay(){
+  const today = todayISO();
+  if (selectedDashboardDateISO >= today) return; // can't navigate into the future
+  selectedDashboardDateISO = isoDateOffset_(selectedDashboardDateISO, 1);
+  renderDashboard();
+}
+
+function dashboardGoToday(){
+  selectedDashboardDateISO = todayISO();
+  renderDashboard();
+}
+
+function updateDashboardDateControls_(){
+  const label = document.getElementById('dashboardDateLabel');
+  if (label) label.textContent = toDisplayDate(selectedDashboardDateISO);
+
+  const prevBtn = document.getElementById('dashboardPrevDayBtn');
+  if (prevBtn) prevBtn.disabled = selectedDashboardDateISO <= dashboardOldestAllowedDateISO_();
+
+  const nextBtn = document.getElementById('dashboardNextDayBtn');
+  if (nextBtn) nextBtn.disabled = selectedDashboardDateISO >= todayISO();
+
+  const todayBtn = document.getElementById('dashboardTodayBtn');
+  if (todayBtn) todayBtn.disabled = selectedDashboardDateISO === todayISO();
+}
+
+function computeDashboardStats(dateISO){
+  dateISO = dateISO || selectedDashboardDateISO;
+
   // AllBranchAccess Managers see every branch (the dashboard already
   // groups by branch, so this just produces one card per branch instead
   // of being filtered down to one). Everyone else stays branch-locked,
@@ -2203,8 +2251,8 @@ function computeDashboardStats(){
         ? data.filter(r => r.branch === currentUser.branch)
         : data); // employees just see overall context; their own row is what matters
 
-  const newToday = scoped.filter(wasCreatedToday);
-  const statusEventsToday = scoped.filter(statusChangedInRelevantWindow);
+  const newToday = scoped.filter(r => wasCreatedOnDate_(r, dateISO));
+  const statusEventsToday = scoped.filter(r => statusChangedOnDate_(r, dateISO));
 
   const byBranch = {};
   function ensureEmpBucket(branch, emp){
@@ -2248,17 +2296,25 @@ function renderDashboard(){
   const container = document.getElementById('dashboardContent');
   container.innerHTML = '';
 
-  // Two distinct things, not one combined "activity" list:
-  //   - newToday: requests actually CREATED today (Worked)
-  //   - statusEventsToday: requests that hit Confirmed/Lost today, by
-  //     LastUpdated, regardless of when they were originally created
-  const { newToday, statusEventsToday, byBranch, byClient } = computeDashboardStats();
+  updateDashboardDateControls_();
 
+  // Two distinct things, not one combined "activity" list:
+  //   - newToday: requests actually CREATED on the selected date (Worked)
+  //   - statusEventsToday: requests that hit Confirmed/Lost on the
+  //     selected date, by LastUpdated, regardless of when originally created
+  const { newToday, statusEventsToday, byBranch, byClient } = computeDashboardStats(selectedDashboardDateISO);
+
+  const isToday = selectedDashboardDateISO === todayISO();
+  const dayLabel = toDisplayDate(selectedDashboardDateISO);
   const note = document.getElementById('dashboardDateNote');
-  if (note) note.textContent = "Showing today's activity only (" + toDisplayDate(todayISO()) + "). Worked = new requests created today. Confirmed/Lost = status reached today, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for all three instead of the calendar day.";
+  if (note) {
+    note.textContent = (isToday ? "Showing today's activity only (" : "Showing activity for ") + dayLabel +
+      (isToday ? ')' : '') +
+      '. Worked = new requests created that day. Confirmed/Lost = status reached that day, even for older requests. Night-shift staff use a 7:30 PM–6 AM window for all three instead of the calendar day.';
+  }
 
   if (newToday.length === 0 && statusEventsToday.length === 0){
-    container.innerHTML = '<p style="color:#888">No activity yet today.</p>';
+    container.innerHTML = '<p style="color:#888">No activity on ' + dayLabel + '.</p>';
     return;
   }
 
@@ -2308,15 +2364,15 @@ function renderDashboard(){
 function exportDashboardToExcel(){
   if (typeof XLSX === 'undefined'){ alert('Excel library failed to load.'); return; }
 
-  const { newToday, statusEventsToday, byBranch, byClient } = computeDashboardStats();
+  const { newToday, statusEventsToday, byBranch, byClient } = computeDashboardStats(selectedDashboardDateISO);
 
   if (newToday.length === 0 && statusEventsToday.length === 0){
-    alert('No activity yet today — nothing to export.');
+    alert('No activity on ' + toDisplayDate(selectedDashboardDateISO) + ' — nothing to export.');
     return;
   }
 
   const wb = XLSX.utils.book_new();
-  const todayLabel = toDisplayDate(todayISO());
+  const todayLabel = toDisplayDate(selectedDashboardDateISO);
 
   const branches = Object.keys(byBranch).sort();
   branches.forEach(branch => {
