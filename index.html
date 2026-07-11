@@ -5,94 +5,143 @@
 <title>Travel Operations Ticketing - LGT Hotel Stays</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-body{font-family:Arial;background:#f4f6f9;margin:0;padding:20px}
-h1{background:#003366;color:white;padding:12px;border-radius:8px;margin-top:0}
-.card{background:white;padding:15px;border-radius:8px;margin-bottom:15px}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+:root{
+  --navy:#003366;
+  --navy-deep:#04213f;
+  --navy-soft:#e6edf5;
+  --gold:#D4AF37;
+  --gold-soft:#f7ecc9;
+  --ink:#1f2933;
+  --ink-muted:#5a6b7b;
+  --bg:#eef1f6;
+  --surface:#ffffff;
+  --border:#dde3ea;
+  --radius:10px;
+  --radius-sm:6px;
+  --shadow-sm:0 1px 2px rgba(15,32,55,.06), 0 1px 1px rgba(15,32,55,.05);
+  --shadow-md:0 6px 16px rgba(15,32,55,.10), 0 1px 3px rgba(15,32,55,.06);
+  --green:#1f7a4d;
+  --green-bg:#e6f4ec;
+  --amber:#b45f06;
+  --amber-bg:#fdf0e3;
+  --purple:#6b3fa0;
+  --purple-bg:#f1e9f8;
+  --blue:#1d5a96;
+  --blue-bg:#e7f0fa;
+  --red:#a4262c;
+  --red-bg:#fbe9e9;
+}
+
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;padding:22px;line-height:1.45}
+
+h1{font-family:Georgia,'Times New Roman',serif;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-deep) 100%);color:#fff;padding:16px 20px;border-radius:var(--radius);margin:0 0 18px;font-weight:600;letter-spacing:.3px;box-shadow:var(--shadow-md);border-bottom:3px solid var(--gold)}
+h2{font-family:Georgia,'Times New Roman',serif;color:var(--navy);font-weight:600;letter-spacing:.2px;margin-top:0}
+
+.card{background:var(--surface);padding:18px 20px;border-radius:var(--radius);margin-bottom:16px;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .field{display:flex;flex-direction:column}
-label{font-weight:bold;margin-bottom:4px;font-size:13px}
-input,select,textarea{padding:8px;font-size:14px}
-button{padding:9px 14px;margin-right:5px;cursor:pointer;border:1px solid #ccc;border-radius:5px;background:#f0f0f0}
-button:hover{background:#e6e6e6}
+label{font-weight:600;margin-bottom:5px;font-size:12px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.4px}
+
+input,select,textarea{padding:9px 10px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;color:var(--ink);background:#fff;transition:border-color .15s ease,box-shadow .15s ease}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-soft)}
+
+button{padding:9px 16px;margin-right:5px;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f4f6f9;color:var(--ink);font-family:inherit;font-weight:600;font-size:13.5px;transition:background .15s ease,box-shadow .15s ease,transform .05s ease}
+button:hover{background:#e8ecf1}
+button:active{transform:translateY(1px)}
 button:disabled{opacity:.5;cursor:default}
-table{width:100%;border-collapse:collapse;background:white;font-size:13px}
-th,td{border:1px solid #ddd;padding:6px;text-align:left}
+button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+
+table{width:100%;border-collapse:collapse;background:var(--surface);font-size:13px;border-radius:var(--radius-sm);overflow:hidden}
+th,td{border:1px solid var(--border);padding:9px 8px;text-align:left}
 /* All free-text inputs show in uppercase as the user types — the JS layer
    also enforces .toUpperCase() on the stored value so nothing slips through
    in lowercase even if CSS is overridden (e.g. mobile browsers). Date inputs
    are excluded since their format (22-June-26) must keep mixed case. */
 input[type="text"],input:not([type]),select.uppercase-sel{text-transform:uppercase}
-th{background:#ffeb3b}
-.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:15px}
-.stat{background:white;padding:12px;text-align:center;border-radius:8px}
-.stat b{font-size:20px;display:block}
-#exportBtn{background:#1b5e20;color:white}
-#refreshBtn{background:#1565c0;color:white}
-#clearAllBtn{background:#b71c1c;color:white}
-#logoutBtn{background:#555;color:white}
-#syncStatus{margin-left:10px;font-size:13px;font-weight:bold;padding:4px 8px;border-radius:6px}
-#syncStatus.sync-live{color:#1b5e20;background:#e8f5e9}
-#syncStatus.sync-syncing{color:#f57c00;background:#fff3e0}
-#syncStatus.sync-error{color:#b71c1c;background:#ffebee}
+th{background:var(--gold);color:var(--navy-deep);font-weight:700;letter-spacing:.2px;text-transform:uppercase;font-size:11.5px}
+tbody tr:nth-child(even){background:#fbfcfe}
+tbody tr:hover{background:#f4f7fb}
 
-.tabs{display:flex;gap:6px;margin-bottom:12px}
-.tab-btn{background:#e3e8ef;border:none;padding:10px 18px;border-radius:6px 6px 0 0;font-weight:bold;color:#003366}
-.tab-btn.active{background:#003366;color:white}
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:15px}
+.stat{background:var(--surface);padding:14px 10px;text-align:center;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.stat b{font-size:22px;display:block;color:var(--navy);font-family:Georgia,serif}
+#exportBtn{background:var(--green);color:#fff;border-color:var(--green)}
+#exportBtn:hover{background:#195c3c}
+#refreshBtn{background:var(--blue);color:#fff;border-color:var(--blue)}
+#refreshBtn:hover{background:#164a7a}
+#clearAllBtn{background:var(--red);color:#fff;border-color:var(--red)}
+#clearAllBtn:hover{background:#861f24}
+#logoutBtn{background:#4a5561;color:#fff;border-color:#4a5561}
+#logoutBtn:hover{background:#39424c}
+#syncStatus{margin-left:10px;font-size:12.5px;font-weight:700;padding:5px 10px;border-radius:20px}
+#syncStatus.sync-live{color:var(--green);background:var(--green-bg)}
+#syncStatus.sync-syncing{color:var(--amber);background:var(--amber-bg)}
+#syncStatus.sync-error{color:var(--red);background:var(--red-bg)}
+
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tab-btn{background:var(--surface);border:1px solid var(--border);border-bottom:none;padding:11px 18px;border-radius:8px 8px 0 0;font-weight:600;color:var(--navy);transition:background .15s ease,color .15s ease}
+.tab-btn:hover{background:var(--navy-soft)}
+.tab-btn.active{background:var(--navy);color:white;border-color:var(--navy)}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 
-.badge{display:inline-block;font-size:11px;padding:3px 8px;border-radius:10px;color:white;font-weight:bold}
-.badge.Open{background:#1976d2}
-.badge.Pending{background:#f57c00}
-.badge.WaitingforClientResponse{background:#8e24aa}
-.badge.Confirmed{background:#2e7d32}
-.badge.Lost{background:#b71c1c}
+.badge{display:inline-block;font-size:11px;padding:4px 10px;border-radius:20px;color:white;font-weight:700;letter-spacing:.2px}
+.badge.Open{background:var(--blue)}
+.badge.Pending{background:var(--amber)}
+.badge.WaitingforClientResponse{background:var(--purple)}
+.badge.Confirmed{background:var(--green)}
+.badge.Lost{background:var(--red)}
 
-#loginScreen{max-width:380px;margin:80px auto;text-align:center}
-#loginScreen h1{margin-bottom:20px}
-#loginScreen input{width:100%;margin-bottom:10px;box-sizing:border-box}
-#loginScreen button{width:100%;background:#003366;color:white;padding:12px;font-size:15px}
-#loginError{color:#b71c1c;font-size:13px;margin-top:8px;min-height:18px}
-#whoami{float:right;font-size:14px;color:#444}
-#whoami b{color:#003366}
+#loginScreen{max-width:380px;margin:100px auto;text-align:center}
+#loginScreen h1{margin-bottom:22px}
+#loginScreen input{width:100%;margin-bottom:12px;box-sizing:border-box}
+#loginScreen button{width:100%;background:var(--navy);color:white;padding:13px;font-size:15px;border-color:var(--navy)}
+#loginScreen button:hover{background:var(--navy-deep)}
+#loginError{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
+#whoami{float:right;font-size:14px;color:var(--ink-muted)}
+#whoami b{color:var(--navy)}
 
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px}
-.dash-card h3{margin:0 0 10px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px}
-.dash-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
-.dash-row b{color:#1b5e20}
+.dash-card h3{margin:0 0 10px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:7px;font-family:Georgia,serif;font-weight:600}
+.dash-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;border-bottom:1px solid #f0f2f5;font-size:13px}
+.dash-row .dash-name{flex:1;min-width:0;overflow-wrap:break-word;font-weight:600;color:var(--ink)}
+.dash-row .dash-stats{white-space:nowrap;flex-shrink:0;color:var(--ink-muted)}
+.dash-row b{color:var(--green)}
 
-.chart-card{background:#fafbfc;border:1px solid #e3e8ef;border-radius:8px;padding:15px}
-.chart-card h3{margin:0 0 10px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px;font-size:15px}
+.chart-card{background:#fbfcfe;border:1px solid var(--border);border-radius:var(--radius);padding:15px;box-shadow:var(--shadow-sm)}
+.chart-card h3{margin:0 0 10px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:7px;font-size:15px;font-family:Georgia,serif;font-weight:600}
 .chart-card .chart-wrap{display:flex;justify-content:center;align-items:center;height:200px}
 .chart-card .chart-wrap svg{width:auto;height:100%}
-.chart-card .chart-total{text-align:center;font-size:12px;color:#666;margin-top:8px}
+.chart-card .chart-total{text-align:center;font-size:12px;color:var(--ink-muted);margin-top:8px}
 .chart-legend{margin-top:10px;font-size:12px}
 .chart-legend-row{display:flex;align-items:center;gap:6px;padding:3px 0}
-.chart-legend-swatch{width:11px;height:11px;border-radius:2px;flex-shrink:0}
-.chart-legend-label{flex:1;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chart-legend-value{color:#666;font-weight:bold;flex-shrink:0}
-.chart-period-btn{background:#e3e8ef;border:none;padding:6px 14px;border-radius:6px;font-weight:bold;color:#003366;cursor:pointer;margin-left:6px}
-.chart-period-btn.active{background:#003366;color:white}
-.scope-btn{background:#e3e8ef;border:none;padding:5px 14px;border-radius:6px;font-size:13px;font-weight:bold;color:#003366;cursor:pointer;margin-right:6px}
-.scope-btn.active{background:#003366;color:white}
+.chart-legend-swatch{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.chart-legend-label{flex:1;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chart-legend-value{color:var(--ink-muted);font-weight:700;flex-shrink:0}
+.chart-period-btn{background:var(--surface);border:1px solid var(--border);padding:6px 14px;border-radius:var(--radius-sm);font-weight:600;color:var(--navy);cursor:pointer;margin-left:6px}
+.chart-period-btn.active{background:var(--navy);color:white;border-color:var(--navy)}
+.scope-btn{background:var(--surface);border:1px solid var(--border);padding:5px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;margin-right:6px}
+.scope-btn.active{background:var(--navy);color:white;border-color:var(--navy)}
 
 .main-layout{display:flex;gap:15px;align-items:flex-start}
 .form-card{flex:1;min-width:0}
 .pending-panel{width:300px;flex-shrink:0;max-height:600px;overflow-y:auto}
-.pending-panel h2{margin:0 0 10px;font-size:16px;color:#003366;border-bottom:2px solid #ffeb3b;padding-bottom:6px}
-.pending-item{border:1px solid #ddd;border-radius:6px;padding:8px;margin-bottom:8px;background:#fafafa}
-.pending-item .pi-top{display:flex;justify-content:space-between;font-weight:bold;font-size:13px}
-.pending-item .pi-meta{font-size:12px;color:#555;margin-top:4px}
-.pending-empty{color:#888;font-size:13px;text-align:center;padding:20px 0}
+.pending-panel h2{margin:0 0 10px;font-size:16px;color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:7px;font-family:Georgia,serif}
+.pending-item{border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;margin-bottom:8px;background:#fafbfc;transition:box-shadow .15s ease}
+.pending-item:hover{box-shadow:var(--shadow-sm)}
+.pending-item .pi-top{display:flex;justify-content:space-between;font-weight:700;font-size:13px}
+.pending-item .pi-meta{font-size:12px;color:var(--ink-muted);margin-top:4px}
+.pending-empty{color:#9aa5b1;font-size:13px;text-align:center;padding:20px 0}
 
 table select{padding:4px;font-size:12px;width:100%}
-input.date-error{border:2px solid #e53935 !important;background:#fff5f5}
-table input.inline-handled{padding:4px;font-size:12px;width:100%;border:1px solid #ccc}
-td.lost-row{background:#ffebee}
-tr.overdue-row{background:#fff3f3}
-tr.overdue-row td{border-color:#ffcdd2}
-.overdue-badge{display:inline-block;background:#b71c1c;color:white;font-size:10px;font-weight:bold;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;white-space:nowrap}
-.btn-mark-lost{font-size:11px;padding:3px 7px;background:#b71c1c;color:white;border:none;border-radius:4px;cursor:pointer;margin-left:4px}
+input.date-error{border:2px solid var(--red) !important;background:var(--red-bg)}
+table input.inline-handled{padding:4px;font-size:12px;width:100%;border:1px solid var(--border)}
+td.lost-row{background:var(--red-bg)}
+tr.overdue-row{background:#fff6f0}
+tr.overdue-row td{border-color:#f3d4c0}
+.overdue-badge{display:inline-block;background:var(--red);color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;white-space:nowrap}
+.btn-mark-lost{font-size:11px;padding:3px 7px;background:var(--red);color:white;border:none;border-radius:4px;cursor:pointer;margin-left:4px}
 
 #dashboardPrevDayBtn:disabled, #dashboardNextDayBtn:disabled, #dashboardTodayBtn:disabled{
   background:#ccc;color:#888;cursor:not-allowed
@@ -264,7 +313,7 @@ tr.overdue-row td{border-color:#ffcdd2}
 
 <!-- BLOCKED TAB -->
 <div id="blockedTab" class="tab-panel">
-<p style="color:#666">Every Confirmed booking appears here with <b>nothing pre-selected</b> — pick <b>Blocked</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Paid</b> if it's already settled. Once a booking is marked <b>Paid</b>, it drops off this list for good.</p>
+<p style="color:#666">Every Confirmed or Waiting for Client Response booking appears here with <b>nothing pre-selected</b> — pick <b>On Hold</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Confirmed</b> if it's already settled. Once a booking's payment status is marked <b>Confirmed</b>, it drops off this list for good.</p>
 <div class="card" style="overflow-x:auto">
 <div id="blockedFiltersContainer"></div>
 <table>
@@ -286,22 +335,7 @@ tr.overdue-row td{border-color:#ffcdd2}
 <div id="reconfirmTab" class="tab-panel">
 <p style="color:#666">Confirmed bookings whose Check In is <b>tomorrow</b> appear here — call the hotel to reconfirm, then fill in all three fields below. A row turns green once Reconfirmed, Designation By, and the Hotel Confirmation Number are all filled in. Regardless of whether it was completed or not, a booking automatically drops off this list the day after its Check In date.</p>
 <div class="card" style="overflow-x:auto">
-<div id="reconfirmClientFilterContainer" style="position:relative;display:inline-block;margin-bottom:12px">
-  <button id="reconfirmClientFilterBtn" onclick="toggleReconfirmClientFilterPanel_()" style="padding:7px 14px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-size:13px">
-    <span>Filter by Client</span><span style="font-size:10px">▼</span>
-  </button>
-  <div id="reconfirmClientFilterPanel" style="display:none;position:absolute;top:110%;left:0;z-index:50;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);width:260px;padding:10px">
-    <input type="text" id="reconfirmClientFilterSearch" placeholder="Search clients..." style="width:100%;padding:6px;margin-bottom:8px;box-sizing:border-box;border:1px solid #ddd;border-radius:4px;font-size:13px" oninput="renderReconfirmClientCheckboxList_(this.value)">
-    <label style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #eee;margin-bottom:6px;font-weight:bold;font-size:13px;cursor:pointer">
-      <input type="checkbox" id="reconfirmClientFilterSelectAll" onchange="toggleReconfirmClientFilterSelectAll_(this.checked)"> Select All
-    </label>
-    <div id="reconfirmClientFilterList" style="max-height:180px;overflow-y:auto"></div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-      <button onclick="cancelReconfirmClientFilter_()" style="padding:5px 12px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">Cancel</button>
-      <button onclick="applyReconfirmClientFilter_()" style="padding:5px 12px;border-radius:4px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px">OK</button>
-    </div>
-  </div>
-</div>
+<div id="reconfirmFiltersContainer"></div>
 <table>
 <thead>
 <tr>
@@ -326,7 +360,7 @@ tr.overdue-row td{border-color:#ffcdd2}
   <button id="dashboardPrevDayBtn" onclick="dashboardPrevDay()" style="padding:6px 14px;border-radius:5px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">← Previous Day</button>
   <span id="dashboardDateLabel" style="font-weight:bold;color:#003366;min-width:110px;text-align:center"></span>
   <button id="dashboardNextDayBtn" onclick="dashboardNextDay()" style="padding:6px 14px;border-radius:5px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">Next Day →</button>
-  <button id="dashboardTodayBtn" onclick="dashboardGoToday()" style="padding:6px 14px;border-radius:5px;border:none;background:#ffeb3b;color:#003366;cursor:pointer;font-size:13px;font-weight:bold">Today</button>
+  <button id="dashboardTodayBtn" onclick="dashboardGoToday()" style="padding:6px 14px;border-radius:5px;border:none;background:#D4AF37;color:#003366;cursor:pointer;font-size:13px;font-weight:bold">Today</button>
 </div>
 <p id="dashboardDateNote" style="color:#666;margin-top:-2px"></p>
 <div id="dashboardContent" class="dash-grid"></div>
@@ -1014,16 +1048,17 @@ function renderBlockedTable(visible, searchTerm){
   const tbody = document.getElementById('blockedBody');
   const emptyMsg = document.getElementById('blockedEmpty');
 
-  // Once a booking is marked Paid it's done — it's excluded here so it
-  // drops off this list for good (until/unless changed back some other
-  // way). Only undecided (blank) or Blocked bookings stay in view.
-  // Also excluded: anything whose Check In date has already passed —
-  // Confirmed is a terminal status (never auto-swept to Lost), so a
-  // booking left undecided here could otherwise sit in this list
-  // indefinitely after the guest has already checked in.
+  // Once a booking's payment status is marked Confirmed it's done — it's
+  // excluded here so it drops off this list for good (until/unless changed
+  // back some other way). Only undecided (blank) or On Hold bookings stay
+  // in view. Shown for both Confirmed and Waiting for Client Response
+  // tickets, not just Confirmed ones. Also excluded: anything whose Check
+  // In date has already passed — Confirmed/Waiting are never auto-swept to
+  // Lost, so a booking left undecided here could otherwise sit in this
+  // list indefinitely after the guest has already checked in.
   const eligible = visible.filter(r =>
-    r.status === 'Confirmed'
-    && String(r.paymentStatus || '').trim() !== 'Paid'
+    (r.status === 'Confirmed' || r.status === 'Waiting for Client Response')
+    && String(r.paymentStatus || '').trim() !== 'Confirmed'
     && !hasCheckInPassed_(r.checkin)
   );
   updateFilterNames_('blocked_client', eligible.map(r => r.client));
@@ -1087,17 +1122,17 @@ function buildBlockedRow(r){
   });
 
   // Nothing is checked by default — status is blank until the employee
-  // explicitly picks Blocked or Paid. isPaid rows never actually reach
-  // this point in practice (renderBlockedTable filters them out), but
-  // kept explicit here for clarity/robustness.
+  // explicitly picks On Hold or Confirmed. isPaymentConfirmed rows never
+  // actually reach this point in practice (renderBlockedTable filters them
+  // out), but kept explicit here for clarity/robustness.
   const paymentStatusVal = String(r.paymentStatus || '').trim();
-  const isBlocked = paymentStatusVal === 'Blocked';
-  const isPaid = paymentStatusVal === 'Paid';
+  const isOnHold = paymentStatusVal === 'On Hold';
+  const isPaymentConfirmed = paymentStatusVal === 'Confirmed';
   const groupName = 'paystatus_' + r.rowId;
 
   // Only the person who's Handled By this booking, or someone explicitly
   // flagged CanChangePaymentStatus='Yes' in the Users sheet, can flip
-  // Blocked/Paid or change the deadline. Deliberately NOT based on
+  // On Hold/Confirmed or change the deadline. Deliberately NOT based on
   // role === 'Manager' — since most/all accounts here are set to
   // "Manager", that would grant this to everyone and defeat the point.
   // The backend enforces this same rule independently (handleUpdateFields_
@@ -1111,18 +1146,18 @@ function buildBlockedRow(r){
 
   const statusTd = document.createElement('td');
 
-  // Blocked stacked above Paid — each on its own line, not side by side.
+  // On Hold stacked above Confirmed — each on its own line, not side by side.
   const blockedLabel = document.createElement('label');
   blockedLabel.style.cssText = 'display:block;cursor:' + (canChangePayment ? 'pointer' : 'not-allowed');
   const blockedRadio = document.createElement('input');
   blockedRadio.type = 'radio';
   blockedRadio.name = groupName;
-  blockedRadio.checked = isBlocked;
+  blockedRadio.checked = isOnHold;
   blockedRadio.disabled = !canChangePayment;
   blockedRadio.onclick = () => {
     deadlineInput.style.display = '';
     confNumInput.style.display = '';
-    setBlockedField_(r, 'paymentStatus', 'Blocked');
+    setBlockedField_(r, 'paymentStatus', 'On Hold');
     // If there's no deadline saved yet, commit the Check In date shown in
     // the field as the actual starting deadline — otherwise the displayed
     // date would look selected without really being saved, which is
@@ -1132,22 +1167,22 @@ function buildBlockedRow(r){
     }
   };
   blockedLabel.appendChild(blockedRadio);
-  blockedLabel.append(' Blocked');
+  blockedLabel.append(' On Hold');
 
   const paidLabel = document.createElement('label');
   paidLabel.style.cssText = 'display:block;cursor:' + (canChangePayment ? 'pointer' : 'not-allowed');
   const paidRadio = document.createElement('input');
   paidRadio.type = 'radio';
   paidRadio.name = groupName;
-  paidRadio.checked = isPaid;
+  paidRadio.checked = isPaymentConfirmed;
   paidRadio.disabled = !canChangePayment;
   paidRadio.onclick = () => {
     deadlineInput.style.display = 'none';
     confNumInput.style.display = 'none';
-    setBlockedField_(r, 'paymentStatus', 'Paid'); // row drops off this list once this save completes
+    setBlockedField_(r, 'paymentStatus', 'Confirmed'); // row drops off this list once this save completes
   };
   paidLabel.appendChild(paidRadio);
-  paidLabel.append(' Paid');
+  paidLabel.append(' Confirmed');
 
   statusTd.appendChild(blockedLabel);
   statusTd.appendChild(paidLabel);
@@ -1170,7 +1205,7 @@ function buildBlockedRow(r){
   const deadlineTd = document.createElement('td');
   deadlineInput.type = 'date';
   deadlineInput.value = r.paymentDeadline || r.checkin || '';
-  deadlineInput.style.display = isBlocked ? '' : 'none';
+  deadlineInput.style.display = isOnHold ? '' : 'none';
   deadlineInput.disabled = !canChangePayment;
   if (r.checkin) deadlineInput.max = r.checkin; // greys out later dates directly in the calendar picker
   deadlineInput.onchange = () => {
@@ -1193,7 +1228,7 @@ function buildBlockedRow(r){
   confNumInput.value = r.confirmationNumber || '';
   confNumInput.placeholder = 'Confirmation #';
   confNumInput.style.width = '130px';
-  confNumInput.style.display = isBlocked ? '' : 'none';
+  confNumInput.style.display = isOnHold ? '' : 'none';
   confNumInput.disabled = !canChangePayment;
   confNumInput.onblur = () => {
     if (confNumInput.value.trim() !== String(r.confirmationNumber || '').trim()) {
@@ -1226,8 +1261,8 @@ function getBlockedPaymentAlerts_(){
   today.setHours(0, 0, 0, 0);
 
   return data.filter(r => {
-    if (r.status !== 'Confirmed') return false;
-    if (String(r.paymentStatus || '').trim() !== 'Blocked') return false;
+    if (r.status !== 'Confirmed' && r.status !== 'Waiting for Client Response') return false;
+    if (String(r.paymentStatus || '').trim() !== 'On Hold') return false;
     if (!r.paymentDeadline) return false;
 
     const deadline = new Date(r.paymentDeadline);
@@ -1280,21 +1315,20 @@ function updateBlockedDeadlineBanner(){
    stops matching once "tomorrow" moves past its Check In date.
    --------------------------------------------------------------------- */
 
-let selectedReconfirmClients = new Set();       // committed filter — empty = show all clients
-let _reconfirmClientFilterAllNames = [];         // cached list of every client currently eligible
-let _reconfirmClientFilterTemp = new Set();      // working selection while the dropdown is open
-
 function renderReconfirmTable(visible, searchTerm){
   const tbody = document.getElementById('reconfirmBody');
   const emptyMsg = document.getElementById('reconfirmEmpty');
   tbody.innerHTML = '';
 
   const eligible = visible.filter(r => r.status === 'Confirmed' && isCheckInTomorrow_(r.checkin));
-  _reconfirmClientFilterAllNames = Array.from(new Set(eligible.map(r => r.client).filter(Boolean))).sort();
-  updateReconfirmClientFilterButtonLabel_();
+  updateFilterNames_('reconfirm_client', eligible.map(r => r.client));
+  updateFilterNames_('reconfirm_employee', eligible.map(r => r.handled));
+  const clientSet = getFilterSet_('reconfirm_client');
+  const empSet = getFilterSet_('reconfirm_employee');
 
   const rows = eligible
-    .filter(r => selectedReconfirmClients.size === 0 || selectedReconfirmClients.has(r.client))
+    .filter(r => clientSet.size === 0 || clientSet.has(r.client))
+    .filter(r => empSet.size === 0 || empSet.has(r.handled))
     .filter(r => !searchTerm || rowSearchText(r).includes(searchTerm));
 
   emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
@@ -1304,106 +1338,6 @@ function renderReconfirmTable(visible, searchTerm){
   rows.forEach(r => frag.appendChild(buildReconfirmRow(r)));
   tbody.appendChild(frag);
 }
-
-/* Excel-style client filter: a button opens a dropdown with a search box,
-   a "Select All" checkbox, and one checkbox per client. Changes only take
-   effect on OK — Cancel discards them — same as a spreadsheet's column
-   filter menu. */
-function toggleReconfirmClientFilterPanel_(){
-  const panel = document.getElementById('reconfirmClientFilterPanel');
-  if (!panel) return;
-
-  const opening = panel.style.display === 'none' || !panel.style.display;
-  if (!opening) { panel.style.display = 'none'; return; }
-
-  // Seed the working selection from the committed filter — an empty
-  // committed set means "show all", so start with everyone checked.
-  _reconfirmClientFilterTemp = selectedReconfirmClients.size === 0
-    ? new Set(_reconfirmClientFilterAllNames)
-    : new Set(selectedReconfirmClients);
-
-  const search = document.getElementById('reconfirmClientFilterSearch');
-  if (search) search.value = '';
-  renderReconfirmClientCheckboxList_('');
-  panel.style.display = 'block';
-}
-
-function renderReconfirmClientCheckboxList_(searchTerm){
-  const list = document.getElementById('reconfirmClientFilterList');
-  if (!list) return;
-  list.innerHTML = '';
-
-  const term = (searchTerm || '').trim().toLowerCase();
-  _reconfirmClientFilterAllNames
-    .filter(name => !term || name.toLowerCase().includes(term))
-    .forEach(name => {
-      const label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 2px;cursor:pointer;font-size:13px';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = _reconfirmClientFilterTemp.has(name);
-      cb.onchange = () => {
-        if (cb.checked) _reconfirmClientFilterTemp.add(name);
-        else _reconfirmClientFilterTemp.delete(name);
-        syncReconfirmSelectAllCheckbox_();
-      };
-      label.appendChild(cb);
-      label.append(' ' + name);
-      list.appendChild(label);
-    });
-
-  syncReconfirmSelectAllCheckbox_();
-}
-
-function syncReconfirmSelectAllCheckbox_(){
-  const selectAll = document.getElementById('reconfirmClientFilterSelectAll');
-  if (!selectAll) return;
-  selectAll.checked = _reconfirmClientFilterAllNames.length > 0
-    && _reconfirmClientFilterAllNames.every(name => _reconfirmClientFilterTemp.has(name));
-}
-
-function toggleReconfirmClientFilterSelectAll_(checked){
-  if (checked) _reconfirmClientFilterAllNames.forEach(n => _reconfirmClientFilterTemp.add(n));
-  else _reconfirmClientFilterTemp.clear();
-  const search = document.getElementById('reconfirmClientFilterSearch');
-  renderReconfirmClientCheckboxList_(search ? search.value : '');
-}
-
-function applyReconfirmClientFilter_(){
-  // Everyone checked is treated the same as "no filter" (empty set) — that
-  // way a brand-new client showing up later isn't silently excluded just
-  // because they didn't exist yet when this filter was last saved.
-  const allSelected = _reconfirmClientFilterAllNames.length > 0
-    && _reconfirmClientFilterAllNames.every(name => _reconfirmClientFilterTemp.has(name));
-  selectedReconfirmClients = allSelected ? new Set() : new Set(_reconfirmClientFilterTemp);
-
-  document.getElementById('reconfirmClientFilterPanel').style.display = 'none';
-  updateReconfirmClientFilterButtonLabel_();
-  render();
-}
-
-function cancelReconfirmClientFilter_(){
-  document.getElementById('reconfirmClientFilterPanel').style.display = 'none';
-}
-
-function updateReconfirmClientFilterButtonLabel_(){
-  const btn = document.getElementById('reconfirmClientFilterBtn');
-  if (!btn) return;
-  const span = btn.querySelector('span');
-  if (!span) return;
-  span.textContent = selectedReconfirmClients.size === 0
-    ? 'Filter by Client'
-    : `Filter by Client (${selectedReconfirmClients.size})`;
-}
-
-// Closes the dropdown when clicking anywhere outside it — standard
-// filter-menu behavior, same as Excel's column filter.
-document.addEventListener('click', function(e){
-  const container = document.getElementById('reconfirmClientFilterContainer');
-  const panel = document.getElementById('reconfirmClientFilterPanel');
-  if (!container || !panel || panel.style.display === 'none') return;
-  if (!container.contains(e.target)) panel.style.display = 'none';
-});
 
 /* True if the given Check In date is strictly before today — used to keep
    the Blocked tab from showing bookings whose guest has already checked
@@ -2329,7 +2263,7 @@ function renderDashboard(){
       const stats = byBranch[branch][emp];
       const row = document.createElement('div');
       row.className = 'dash-row';
-      row.innerHTML = '<span>' + escapeHtml(emp) + '</span><span>Worked: <b>' + stats.worked + '</b> &nbsp; Confirmed: <b>' + stats.confirmed + '</b> &nbsp; Lost: <b>' + stats.lost + '</b></span>';
+      row.innerHTML = '<span class="dash-name">' + escapeHtml(emp) + '</span><span class="dash-stats">Worked: <b>' + stats.worked + '</b> &nbsp; Confirmed: <b>' + stats.confirmed + '</b></span>';
       card.appendChild(row);
     });
 
@@ -2346,7 +2280,7 @@ function renderDashboard(){
     const stats = byClient[client];
     const row = document.createElement('div');
     row.className = 'dash-row';
-    row.innerHTML = '<span>' + escapeHtml(client) + '</span><span>Requests: <b>' + stats.requests + '</b> &nbsp; Lost: <b>' + stats.lost + '</b></span>';
+    row.innerHTML = '<span class="dash-name">' + escapeHtml(client) + '</span><span class="dash-stats">Requests: <b>' + stats.requests + '</b></span>';
     clientCard.appendChild(row);
   });
 
@@ -2466,7 +2400,7 @@ function computeChartStats(){
   return { inPeriod, byBranch, byEmployee, closed, lost, nightsConfirmed, nightsByBranch };
 }
 
-const CHART_COLORS = ['#003366','#1b5e20','#ffeb3b','#b71c1c','#6a1b9a','#ef6c00','#00838f','#5d4037','#827717','#37474f'];
+const CHART_COLORS = ['#003366','#1b5e20','#D4AF37','#b71c1c','#6a1b9a','#ef6c00','#00838f','#5d4037','#827717','#37474f'];
 
 /* Builds one <path> per slice on a unit circle of radius `r` centered at
    (cx,cy), starting at 12 o'clock and going clockwise — plain trig, no
@@ -2758,6 +2692,12 @@ window.onload = function(){
     blockedFiltersEl.innerHTML =
       buildFilterWidgetHtml_('blocked_client', 'Filter by Client') +
       buildFilterWidgetHtml_('blocked_employee', 'Filter by Employee');
+  }
+  const reconfirmFiltersEl = document.getElementById('reconfirmFiltersContainer');
+  if (reconfirmFiltersEl) {
+    reconfirmFiltersEl.innerHTML =
+      buildFilterWidgetHtml_('reconfirm_client', 'Filter by Client') +
+      buildFilterWidgetHtml_('reconfirm_employee', 'Filter by Employee');
   }
 
   tryResumeSession();
