@@ -12,7 +12,7 @@
   --gold:#D4AF37;
   --gold-soft:#f7ecc9;
   --ink:#1f2933;
-  --ink-muted:#5a6b7b;
+  --ink-muted:#46525c;
   --bg:#eef1f6;
   --surface:#ffffff;
   --border:#dde3ea;
@@ -132,7 +132,7 @@ tbody tr:hover{background:#f4f7fb}
 .pending-item:hover{box-shadow:var(--shadow-sm)}
 .pending-item .pi-top{display:flex;justify-content:space-between;font-weight:700;font-size:13px}
 .pending-item .pi-meta{font-size:12px;color:var(--ink-muted);margin-top:4px}
-.pending-empty{color:#9aa5b1;font-size:13px;text-align:center;padding:20px 0}
+.pending-empty{color:#5c6874;font-size:13px;text-align:center;padding:20px 0}
 
 table select{padding:4px;font-size:12px;width:100%}
 input.date-error{border:2px solid var(--red) !important;background:var(--red-bg)}
@@ -144,7 +144,7 @@ tr.overdue-row td{border-color:#f3d4c0}
 .btn-mark-lost{font-size:11px;padding:3px 7px;background:var(--red);color:white;border:none;border-radius:4px;cursor:pointer;margin-left:4px}
 
 #dashboardPrevDayBtn:disabled, #dashboardNextDayBtn:disabled, #dashboardTodayBtn:disabled{
-  background:#ccc;color:#888;cursor:not-allowed
+  background:#ccc;color:#4a5560;cursor:not-allowed
 }
 
 @media (max-width:900px){
@@ -237,7 +237,7 @@ tr.overdue-row td{border-color:#f3d4c0}
   <select id="priority"><option>Normal</option><option>Urgent</option></select></div>
 <div class="field"><label>Assign To</label><select id="assignTo"><option value="">Loading…</option></select></div>
 </div>
-<p style="color:#666;font-size:12px">City, Country, Vendor, Check-in/Check-out and Booking details will be filled in by whoever handles this request. The request is created directly as <b>Pending</b>, assigned to whoever you pick above.</p>
+<p style="color:#3f4750;font-size:12px">City, Country, Vendor, Check-in/Check-out and Booking details will be filled in by whoever handles this request. The request is created directly as <b>Pending</b>, assigned to whoever you pick above.</p>
 <button onclick="saveRecord()" style="background:#003366;color:white;padding:10px 20px">Submit Request</button>
 </div>
 
@@ -251,11 +251,11 @@ tr.overdue-row td{border-color:#f3d4c0}
 <!-- TICKETS TAB -->
 <div id="ticketsTab" class="tab-panel">
 <div class="card" style="padding-bottom:8px">
-  <span style="font-size:13px;color:#555;font-weight:bold;margin-right:10px">View:</span>
+  <span style="font-size:13px;color:#3a424b;font-weight:bold;margin-right:10px">View:</span>
   <button class="scope-btn" data-scope="mine" onclick="setTicketScope('mine')">My Tickets</button>
   <button class="scope-btn active" data-scope="branch" onclick="setTicketScope('branch')">My Branch</button>
   <button class="scope-btn allbranch-only" data-scope="all" onclick="setTicketScope('all')" style="display:none">All Company</button>
-  <span id="scopeNote" style="font-size:12px;color:#888;margin-left:12px"></span>
+  <span id="scopeNote" style="font-size:12px;color:#4a5560;margin-left:12px"></span>
 </div>
 <div class="card" style="overflow-x:auto;margin-top:0">
 <table>
@@ -268,13 +268,13 @@ tr.overdue-row td{border-color:#f3d4c0}
 </thead>
 <tbody id="ticketsBody"></tbody>
 </table>
-<p id="ticketsEmpty" style="display:none;color:#888;text-align:center;padding:20px">No tickets to show.</p>
+<p id="ticketsEmpty" style="display:none;color:#4a5560;text-align:center;padding:20px">No tickets to show.</p>
 </div>
 </div>
 
 <!-- LOST TAB -->
 <div id="lostTab" class="tab-panel">
-<p style="color:#666">Bookings whose Check-In date has passed without being Confirmed. Status is auto-set to <b>Lost</b>.</p>
+<p style="color:#3f4750">Bookings whose Check-In date has passed without being Confirmed. Status is auto-set to <b>Lost</b>.</p>
 <div class="card" style="overflow-x:auto">
 <table>
 <thead>
@@ -286,13 +286,13 @@ tr.overdue-row td{border-color:#f3d4c0}
 </thead>
 <tbody id="lostBody"></tbody>
 </table>
-<p id="lostEmpty" style="display:none;color:#888;text-align:center;padding:20px">No lost bookings. 🎉</p>
+<p id="lostEmpty" style="display:none;color:#4a5560;text-align:center;padding:20px">No lost bookings. 🎉</p>
 </div>
 </div>
 
 <!-- CONFIRMED TAB -->
 <div id="confirmedTab" class="tab-panel">
-<p style="color:#666">Bookings that have been <b>Confirmed</b>. Delete a ticket individually below.</p>
+<p style="color:#3f4750">Bookings that have been <b>Confirmed</b>. Delete a ticket individually below.</p>
 <div class="card" style="overflow-x:auto">
 <div id="confirmedFiltersContainer"></div>
 <table>
@@ -307,13 +307,13 @@ tr.overdue-row td{border-color:#f3d4c0}
 </thead>
 <tbody id="confirmedBody"></tbody>
 </table>
-<p id="confirmedEmpty" style="display:none;color:#888;text-align:center;padding:20px">No confirmed bookings yet.</p>
+<p id="confirmedEmpty" style="display:none;color:#4a5560;text-align:center;padding:20px">No confirmed bookings yet.</p>
 </div>
 </div>
 
 <!-- BLOCKED TAB -->
 <div id="blockedTab" class="tab-panel">
-<p style="color:#666">Every Confirmed or Waiting for Client Response booking appears here with <b>nothing pre-selected</b> — pick <b>On Hold</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Confirmed</b> if it's already settled. Once a booking's payment status is marked <b>Confirmed</b>, it drops off this list for good.</p>
+<p style="color:#3f4750">Every Confirmed or Waiting for Client Response booking appears here with <b>nothing pre-selected</b> — pick <b>On Hold</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Confirmed</b> if it's already settled. Once a booking's payment status is marked <b>Confirmed</b>, it drops off this list for good.</p>
 <div class="card" style="overflow-x:auto">
 <div id="blockedFiltersContainer"></div>
 <table>
@@ -327,13 +327,13 @@ tr.overdue-row td{border-color:#f3d4c0}
 </thead>
 <tbody id="blockedBody"></tbody>
 </table>
-<p id="blockedEmpty" style="display:none;color:#888;text-align:center;padding:20px">Nothing awaiting a payment decision right now.</p>
+<p id="blockedEmpty" style="display:none;color:#4a5560;text-align:center;padding:20px">Nothing awaiting a payment decision right now.</p>
 </div>
 </div>
 
 <!-- RECONFIRMATIONS TAB -->
 <div id="reconfirmTab" class="tab-panel">
-<p style="color:#666">Confirmed bookings whose Check In is <b>tomorrow</b> appear here — call the hotel to reconfirm, then fill in all three fields below. A row turns green once Reconfirmed, Designation By, and the Hotel Confirmation Number are all filled in. Regardless of whether it was completed or not, a booking automatically drops off this list the day after its Check In date.</p>
+<p style="color:#3f4750">Confirmed bookings whose Check In is <b>tomorrow</b> appear here — call the hotel to reconfirm, then fill in all three fields below. A row turns green once Reconfirmed, Designation By, and the Hotel Confirmation Number are all filled in. Regardless of whether it was completed or not, a booking automatically drops off this list the day after its Check In date.</p>
 <div class="card" style="overflow-x:auto">
 <div id="reconfirmFiltersContainer"></div>
 <table>
@@ -346,7 +346,7 @@ tr.overdue-row td{border-color:#f3d4c0}
 </thead>
 <tbody id="reconfirmBody"></tbody>
 </table>
-<p id="reconfirmEmpty" style="display:none;color:#888;text-align:center;padding:20px">No bookings checking in tomorrow.</p>
+<p id="reconfirmEmpty" style="display:none;color:#4a5560;text-align:center;padding:20px">No bookings checking in tomorrow.</p>
 </div>
 </div>
 
@@ -362,7 +362,7 @@ tr.overdue-row td{border-color:#f3d4c0}
   <button id="dashboardNextDayBtn" onclick="dashboardNextDay()" style="padding:6px 14px;border-radius:5px;border:none;background:#003366;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">Next Day →</button>
   <button id="dashboardTodayBtn" onclick="dashboardGoToday()" style="padding:6px 14px;border-radius:5px;border:none;background:#D4AF37;color:#003366;cursor:pointer;font-size:13px;font-weight:bold">Today</button>
 </div>
-<p id="dashboardDateNote" style="color:#666;margin-top:-2px"></p>
+<p id="dashboardDateNote" style="color:#3f4750;margin-top:-2px"></p>
 <div id="dashboardContent" class="dash-grid"></div>
 </div>
 </div>
@@ -376,7 +376,8 @@ tr.overdue-row td{border-color:#f3d4c0}
     <button id="chartsPeriodAll" class="chart-period-btn" onclick="setChartsPeriod('all')" style="font-size:13px">All-Time</button>
   </span>
 </h2>
-<p id="chartsRangeNote" style="color:#666;margin-top:-6px"></p>
+<p id="chartsRangeNote" style="color:#3f4750;margin-top:-6px"></p>
+<div id="chartsFiltersContainer" style="margin-bottom:6px"></div>
 <div id="chartsGrid" class="dash-grid"></div>
 </div>
 </div>
@@ -1189,7 +1190,7 @@ function buildBlockedRow(r){
   if (!canChangePayment) {
     const lockNote = document.createElement('div');
     lockNote.textContent = 'Only ' + (r.handled || 'the handler') + ' or someone with payment access can change this';
-    lockNote.style.cssText = 'font-size:11px;color:#999;margin-top:2px';
+    lockNote.style.cssText = 'font-size:11px;color:#4a5560;margin-top:2px';
     statusTd.appendChild(lockNote);
   }
   tr.appendChild(statusTd);
@@ -2245,7 +2246,7 @@ function renderDashboard(){
   }
 
   if (newToday.length === 0 && statusEventsToday.length === 0){
-    container.innerHTML = '<p style="color:#888">No activity on ' + dayLabel + '.</p>';
+    container.innerHTML = '<p style="color:#4a5560">No activity on ' + dayLabel + '.</p>';
     return;
   }
 
@@ -2374,7 +2375,21 @@ function computeChartStats(){
     ? data
     : data.filter(r => r.branch === currentUser.branch);
 
-  const inPeriod = scoped.filter(isInChartsPeriod);
+  // Extra, employee-driven filters — on top of the fixed branch-access
+  // scoping above, not a replacement for it.
+  updateFilterNames_('charts_branch', scoped.map(r => r.branch));
+  updateFilterNames_('charts_employee', scoped.map(r => r.handled));
+  updateFilterNames_('charts_client', scoped.map(r => r.client));
+  const branchSet = getFilterSet_('charts_branch');
+  const empSet = getFilterSet_('charts_employee');
+  const clientSet = getFilterSet_('charts_client');
+
+  const filtered = scoped
+    .filter(r => branchSet.size === 0 || branchSet.has(r.branch))
+    .filter(r => empSet.size === 0 || empSet.has(r.handled))
+    .filter(r => clientSet.size === 0 || clientSet.has(r.client));
+
+  const inPeriod = filtered.filter(isInChartsPeriod);
 
   const byBranch = {};      // branch -> total request count
   const byEmployee = {};    // employee -> total request count
@@ -2452,7 +2467,7 @@ function makePieCard(grid, title, labelsAndValues, totalSuffix){
   const total = labelsAndValues.reduce((sum, [, v]) => sum + v, 0);
 
   if (total === 0) {
-    card.innerHTML = `<h3>${escapeHtml(title)}</h3><p style="color:#888;text-align:center;padding:40px 0">No data for this period.</p>`;
+    card.innerHTML = `<h3>${escapeHtml(title)}</h3><p style="color:#4a5560;text-align:center;padding:40px 0">No data for this period.</p>`;
     grid.appendChild(card);
     return;
   }
@@ -2476,7 +2491,7 @@ function renderCharts(){
   if (note) note.textContent = `Showing ${rangeLabel}` + (currentUser.allBranchAccess ? ' · all branches' : ` · ${currentUser.branch || ''} branch`);
 
   if (stats.inPeriod.length === 0) {
-    grid.innerHTML = '<p style="color:#888">No requests in this period yet.</p>';
+    grid.innerHTML = '<p style="color:#4a5560">No requests in this period yet.</p>';
     return;
   }
 
@@ -2698,6 +2713,13 @@ window.onload = function(){
     reconfirmFiltersEl.innerHTML =
       buildFilterWidgetHtml_('reconfirm_client', 'Filter by Client') +
       buildFilterWidgetHtml_('reconfirm_employee', 'Filter by Employee');
+  }
+  const chartsFiltersEl = document.getElementById('chartsFiltersContainer');
+  if (chartsFiltersEl) {
+    chartsFiltersEl.innerHTML =
+      buildFilterWidgetHtml_('charts_branch', 'Filter by Branch') +
+      buildFilterWidgetHtml_('charts_employee', 'Filter by Employee') +
+      buildFilterWidgetHtml_('charts_client', 'Filter by Client');
   }
 
   tryResumeSession();
