@@ -11,7 +11,7 @@
   --navy-soft:#e6edf5;
   --gold:#D4AF37;
   --gold-soft:#f7ecc9;
-  --ink:#1f2933;
+  --ink:#10161c;
   --ink-muted:#46525c;
   --bg:#eef1f6;
   --surface:#ffffff;
@@ -43,7 +43,7 @@ h2{font-family:Georgia,'Times New Roman',serif;color:var(--navy);font-weight:600
 .field{display:flex;flex-direction:column}
 label{font-weight:600;margin-bottom:5px;font-size:12px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.4px}
 
-input,select,textarea{padding:9px 10px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;color:var(--ink);background:#fff;transition:border-color .15s ease,box-shadow .15s ease}
+input,select,textarea{padding:9px 10px;font-size:14px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;color:var(--ink);background:#fff;transition:border-color .15s ease,box-shadow .15s ease}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-soft)}
 
 button{padding:9px 16px;margin-right:5px;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f4f6f9;color:var(--ink);font-family:inherit;font-weight:600;font-size:13.5px;transition:background .15s ease,box-shadow .15s ease,transform .05s ease}
@@ -53,7 +53,7 @@ button:disabled{opacity:.5;cursor:default}
 button:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 
 table{width:100%;border-collapse:collapse;background:var(--surface);font-size:13px;border-radius:var(--radius-sm);overflow:hidden}
-th,td{border:1px solid var(--border);padding:9px 8px;text-align:left}
+th,td{border:1px solid var(--border);padding:9px 8px;text-align:left;color:var(--ink);font-weight:500}
 /* All free-text inputs show in uppercase as the user types — the JS layer
    also enforces .toUpperCase() on the stored value so nothing slips through
    in lowercase even if CSS is overridden (e.g. mobile browsers). Date inputs
