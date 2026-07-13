@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LGT Hotel Stays — Voucher Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --lgt-red:#D0161C;
+    --lgt-red-dark:#a31115;
+    --ink:#1c1c1c;
+    --paper:#ffffff;
+    --mist:#f6f4f2;
+    --line:#e4dfd9;
+    --muted:#7a7169;
+    --ok:#1e8e4f;
+    --warn:#b8860b;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--mist);
+    color:var(--ink);
+  }
+  .app{
+    display:grid;
+    grid-template-columns:360px 1fr;
+    min-height:100vh;
+  }
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;}
+  }
+
+  /* LEFT PANEL */
+  .panel{
+    background:var(--paper);
+    border-right:1px solid var(--line);
+    padding:24px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:22px;
+  }
+  .logo-badge{
+    width:52px;height:52px;
+    border-radius:50%;
+    background:var(--lgt-red);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.4);
+    flex-shrink:0;
+  }
+  .logo-badge span{
+    color:#fff;font-weight:800;font-size:15px;letter-spacing:1px;
+    font-style:italic;
+  }
+  .sidebar-logo{width:52px;height:52px;object-fit:contain;flex-shrink:0;}
+  .brand-text .name{font-weight:800;font-size:18px;color:var(--lgt-red);line-height:1.1;}
+  .brand-text .tag{font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;}
+
+  .drop{
+    border:2px dashed var(--line);
+    border-radius:10px;
+    padding:26px 14px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13.5px;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop.drag{
+    border-color:var(--lgt-red);
+    background:rgba(208,22,28,.04);
+    color:var(--lgt-red-dark);
+  }
+  .drop b{display:block;font-size:14px;color:var(--ink);margin-bottom:4px;}
+  input[type=file]{display:none;}
+
+  .staff-box{
+    margin-top:22px;
+    padding-top:18px;
+    border-top:1px solid var(--line);
+  }
+  .staff-box h4{
+    font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);
+    margin:0 0 10px 0;font-weight:700;
+  }
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px;}
+  .field input{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+    font-size:13.5px;font-family:inherit;
+  }
+  .field input:focus{outline:none;border-color:var(--lgt-red);}
+
+  .voucher-list{margin-top:20px;}
+  .voucher-list h4{
+    font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);
+    margin:0 0 10px 0;font-weight:700;
+  }
+  .v-item{
+    padding:11px 12px;border:1px solid var(--line);border-radius:8px;
+    margin-bottom:8px;cursor:pointer;background:#fff;
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+  }
+  .v-item:hover{border-color:var(--lgt-red);}
+  .v-item.active{border-color:var(--lgt-red);background:rgba(208,22,28,.05);}
+  .v-item .vi-main{overflow:hidden;}
+  .v-item .vi-hotel{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .v-item .vi-sub{font-size:11.5px;color:var(--muted);}
+  .badge{
+    font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;
+  }
+  .badge.ok{background:rgba(30,142,79,.12);color:var(--ok);}
+  .badge.warn{background:rgba(184,134,11,.13);color:var(--warn);}
+  .badge.err{background:rgba(208,22,28,.12);color:var(--lgt-red-dark);}
+  .v-item button.del{
+    border:none;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;
+    padding:2px 4px;
+  }
+  .v-item button.del:hover{color:var(--lgt-red);}
+
+  .empty-note{font-size:12.5px;color:var(--muted);margin-top:10px;}
+
+  /* RIGHT PANEL */
+  .main{
+    padding:32px;
+    overflow-y:auto;
+  }
+  .placeholder{
+    display:flex;align-items:center;justify-content:center;height:70vh;
+    color:var(--muted);font-size:15px;text-align:center;max-width:420px;margin:0 auto;
+  }
+
+  .review-bar{
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+    margin-bottom:18px;
+  }
+  .review-bar h2{margin:0;font-size:19px;}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}
+  .actions button{
+    background:var(--lgt-red);color:#fff;border:none;padding:10px 16px;
+    border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .actions button.secondary{background:#fff;color:var(--lgt-red);border:1px solid var(--lgt-red);}
+  .actions button:hover{opacity:.9;}
+  .actions button:disabled{opacity:.6;cursor:default;}
+
+  .review-grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:14px;
+    background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;
+  }
+  @media (max-width:700px){.review-grid{grid-template-columns:1fr;}}
+  .review-grid .full{grid-column:1/-1;}
+  .review-grid label{
+    display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--muted);margin-bottom:4px;font-weight:600;
+  }
+  .review-grid input, .review-grid textarea{
+    width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;
+    font-size:13.5px;font-family:inherit;
+  }
+  .review-grid textarea{min-height:64px;resize:vertical;}
+  .review-grid input:focus, .review-grid textarea:focus{outline:none;border-color:var(--lgt-red);}
+  .review-grid input.flag{border-color:var(--warn);background:#fffbf0;}
+  .flag-note{font-size:10.5px;color:var(--warn);margin-top:3px;}
+
+  /* VOUCHER PREVIEW - professional LGT Prepaid Hotel Confirmation Voucher styling */
+  .voucher{
+    background:#fff;
+    box-shadow:0 2px 24px rgba(20,15,10,.08);
+    border-radius:12px;
+    padding:44px 48px;max-width:720px;margin:24px auto 0 auto;
+    font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  .voucher-head{
+    display:flex;align-items:center;gap:18px;margin-bottom:20px;
+    padding-bottom:20px;border-bottom:2px solid var(--lgt-red);
+  }
+  .voucher-logo{height:64px;width:auto;flex-shrink:0;}
+  .vh-divider{width:1px;align-self:stretch;background:var(--line);}
+  .voucher-head .vh-title{margin-left:auto;text-align:right;}
+  .voucher-head .vh-title .t1{
+    font-size:12px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;font-weight:600;
+  }
+  .voucher-head .vh-title .t2{
+    font-size:21px;font-weight:800;color:var(--ink);letter-spacing:.2px;
+  }
+
+  .emergency-box{
+    background:#fff6f2;border:1.5px solid var(--lgt-red);border-radius:10px;
+    padding:14px 18px;margin-bottom:22px;
+  }
+  .emergency-title{
+    font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;
+    color:var(--lgt-red-dark);margin-bottom:6px;
+  }
+  .emergency-body{font-size:12px;color:#5a4f47;line-height:1.5;margin-bottom:8px;}
+  .emergency-contact{font-size:13.5px;color:var(--ink);}
+  .emergency-contact b{color:var(--lgt-red-dark);}
+
+  .sec-title{
+    font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--lgt-red);
+    font-weight:800;margin:26px 0 10px 0;
+    display:flex;align-items:center;gap:10px;
+  }
+  .sec-title::after{content:'';flex:1;height:1px;background:var(--line);}
+
+  .sec-block{
+    background:var(--mist);
+    border-radius:10px;
+    padding:4px 18px;
+  }
+  .sec-block .row{
+    display:flex;justify-content:space-between;align-items:baseline;gap:20px;
+    padding:10px 0;border-bottom:1px solid rgba(0,0,0,.05);
+  }
+  .sec-block .row:last-child{border-bottom:none;}
+  .sec-block .row .rk{
+    font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;
+    font-weight:600;flex-shrink:0;width:42%;
+  }
+  .sec-block .row .rv{
+    font-size:14px;color:var(--ink);text-align:right;flex-grow:1;
+  }
+  .sec-block .row.strong .rv{font-weight:700;}
+  .sec-block .row .rv a{color:var(--lgt-red-dark);text-decoration:none;font-weight:600;}
+  .sec-block .row .rv a:hover{text-decoration:underline;}
+  .sec-block .row .rv-muted{color:var(--muted);font-style:italic;font-size:12.5px;}
+
+  .policy-box{
+    background:#fff6f2;border:1px solid #f3d9d1;border-left:4px solid var(--lgt-red);
+    padding:13px 16px;font-size:12.5px;line-height:1.6;color:#3a3530;
+    border-radius:0 8px 8px 0;
+  }
+
+  .voucher-note{
+    margin-top:26px;padding:14px 16px;
+    background:var(--mist);border-radius:8px;
+    font-size:12px;text-align:center;color:var(--lgt-red-dark);font-weight:600;line-height:1.5;
+  }
+
+  .v-footer{
+    margin-top:22px;padding-top:16px;border-top:1px solid var(--line);
+    text-align:center;font-size:11.5px;color:var(--muted);
+  }
+
+  .gen-placeholder{
+    max-width:520px;margin:40px auto;text-align:center;
+    color:var(--muted);font-size:13.5px;line-height:1.6;
+    padding:28px 24px;border:1.5px dashed var(--line);border-radius:10px;
+  }
+  .gen-placeholder b{color:var(--lgt-red-dark);}
+
+  @keyframes voucherFlash{
+    0%{box-shadow:0 2px 24px rgba(20,15,10,.08), 0 0 0 3px rgba(208,22,28,.55);}
+    100%{box-shadow:0 2px 24px rgba(20,15,10,.08), 0 0 0 3px rgba(208,22,28,0);}
+  }
+  .voucher.flash{animation:voucherFlash 1.1s ease-out;}
+
+  @media print{
+    .panel, .review-bar, .actions{display:none !important;}
+    .app{display:block;}
+    .main{padding:0;}
+    .voucher{box-shadow:none;margin:0;max-width:100%;padding:20px;}
+    .gen-placeholder{display:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- LEFT: upload + staff + list -->
+  <div class="panel">
+    <div class="brand">
+      <img class="sidebar-logo" src="" id="sidebarLogo" alt="LGT Hotel Stays">
+      <div class="brand-text">
+        <div class="name">LGT Hotel Stays</div>
+        <div class="tag">Voucher Generator</div>
+      </div>
+    </div>
+
+    <div class="drop" id="dropZone">
+      <b>Drop voucher PDFs here</b>
+      or click to browse<br>(Marriott / Rezlive / Akbar / OTA / LGT formats)
+      <input type="file" id="fileInput" multiple accept="application/pdf">
+    </div>
+
+    <div class="staff-box">
+      <h4>Voucher issued by</h4>
+      <div class="field">
+        <label>Staff name</label>
+        <input id="staffName" placeholder="e.g. Suresh Sudarsan" value=" ">
+      </div>
+      <div class="field">
+        <label>Contact number</label>
+        <input id="staffContact" placeholder="e.g. 9176519002" value=" ">
+      </div>
+    </div>
+
+    <div class="voucher-list">
+      <h4>Uploaded vouchers</h4>
+      <div id="listArea" class="empty-note">Nothing uploaded yet.</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: review + generated voucher -->
+  <div class="main" id="mainArea">
+    <div class="placeholder">Drop one or more hotel voucher PDFs on the left to auto-extract the booking details and generate an LGT Hotel Stays voucher.</div>
+  </div>
+
+</div>
+
+<script>
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+} else {
+  console.error('pdf.js failed to load from CDN — PDF parsing will be unavailable.');
+}
+
+const LOGO_DATA_URI = "data:image/png;base64,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";
+
+let vouchers = []; // {id, filename, rawText, fields:{}, flags:{}}
+const MONTH_FULL = {jan:'January',feb:'February',mar:'March',apr:'April',may:'May',jun:'June',
+  jul:'July',aug:'August',sep:'September',oct:'October',nov:'November',dec:'December'};
+
+function normalizeMonthName(m){
+  const key = m.slice(0,3).toLowerCase();
+  return MONTH_FULL[key] || (m.charAt(0).toUpperCase() + m.slice(1).toLowerCase());
+}
+
+function extractDayMonth(dateStr){
+  if(!dateStr) return null;
+  let m = dateStr.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})/);
+  if(m) return {day: parseInt(m[1],10), month: m[2]};
+  m = dateStr.match(/(\d{1,2})-([A-Za-z]{3,9})-\d{2,4}/);
+  if(m) return {day: parseInt(m[1],10), month: m[2]};
+  m = dateStr.match(/([A-Za-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?/);
+  if(m) return {day: parseInt(m[2],10), month: m[1]};
+  return null;
+}
+
+function buildVoucherFilename(f, fallback){
+  const guest = (f.guestName || 'Guest').trim().replace(/[\\/:*?"<>|]/g, '');
+  const inDM = extractDayMonth(f.checkIn);
+  const outDM = extractDayMonth(f.checkOut);
+
+  let dateLabel = '';
+  if(inDM && outDM){
+    const sameMonth = inDM.month.slice(0,3).toLowerCase() === outDM.month.slice(0,3).toLowerCase();
+    dateLabel = sameMonth
+      ? `${inDM.day}-${outDM.day} ${normalizeMonthName(outDM.month)}`
+      : `${inDM.day} ${normalizeMonthName(inDM.month)}-${outDM.day} ${normalizeMonthName(outDM.month)}`;
+  } else if(inDM){
+    dateLabel = `${inDM.day} ${normalizeMonthName(inDM.month)}`;
+  }
+
+  if(guest && dateLabel) return `${guest}(${dateLabel}).pdf`;
+  if(guest) return `${guest}.pdf`;
+  return `${fallback}.pdf`;
+}
+
+document.getElementById('sidebarLogo').src = LOGO_DATA_URI;
+let activeId = null;
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev, e=>{e.preventDefault();dropZone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev, e=>{e.preventDefault();dropZone.classList.remove('drag');}));
+dropZone.addEventListener('drop', e=>handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e=>handleFiles(e.target.files));
+
+async function handleFiles(fileList){
+  for(const file of fileList){
+    if(file.type !== 'application/pdf') continue;
+    const id = 'v'+Date.now()+Math.random().toString(36).slice(2,7);
+    const entry = {id, filename:file.name, rawText:'', fields:null, flags:{}};
+    vouchers.push(entry);
+    renderList();
+    try{
+      const text = await extractText(file);
+      entry.rawText = text;
+      entry.fields = parseVoucher(text);
+      renderList();
+      if(!activeId) selectVoucher(id);
+    }catch(err){
+      entry.fields = emptyFields();
+      entry.flags.error = true;
+      renderList();
+    }
+  }
+}
+
+async function extractText(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  let full = '';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const strings = content.items.map(it=>it.str);
+    full += strings.join(' ') + '\n';
+  }
+  return full;
+}
+
+function emptyFields(){
+  return {
+    confirmationNumber:'', hotelName:'', hotelAddress:'', hotelContact:'',
+    checkIn:'', checkInTime:'', checkOut:'', checkOutTime:'',
+    guestName:'', adults:'', children:'0', roomType:'', inclusions:'', rooms:'1', nights:'',
+    cancellationPolicy:'', bookedPayableBy:'LGT India'
+  };
+}
+
+// ---------- PARSING CASCADE ----------
+const CHAIN_KEYWORDS = ['Marriott','Sheraton','Courtyard','Doubletree','Hilton','Ibis','Crowne Plaza',
+  'Hyatt','Radisson','Novotel','Holiday Inn','Westin','Renaissance','Le Meridien','Four Points',
+  'JW Marriott','Taj','ITC','Oberoi','Fairmont','InterContinental','Ritz-Carlton','Conrad','Aloft','Le Méridien'];
+
+const DATE_PATTERNS = [
+  /[A-Za-z]{3,9},?\s*\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s+\d{4}/,   // Tue, 14 Jul 2026 / Monday, 16th Feb 2026
+  /[A-Za-z]{3,9}\s+\d{1,2},\s*\d{4}/,                                     // July 8, 2026
+  /\d{1,2}-[A-Za-z]{3,9}-\d{4}/,                                          // 24-May-2026
+  /\d{1,2}\/\d{1,2}\/\d{2,4}/                                             // 24/05/2026 fallback
+];
+
+function findDateNear(text, labelRegex){
+  // try every occurrence of the label in order, and return the first one
+  // that actually has a recognizable date nearby (avoids false hits like
+  // "...before checkin" with no date attached)
+  const flags = labelRegex.flags.includes('g') ? labelRegex.flags : labelRegex.flags+'g';
+  const globalRe = new RegExp(labelRegex.source, flags);
+  let m;
+  while((m = globalRe.exec(text)) !== null){
+    const start = m.index + m[0].length;
+    const window = text.slice(start, start+90);
+    for(const dp of DATE_PATTERNS){
+      const dm = window.match(dp);
+      if(dm) return dm[0].trim();
+    }
+    if(globalRe.lastIndex === m.index) globalRe.lastIndex++;
+  }
+  return '';
+}
+
+function extractCount(text, label){
+  let m = text.match(new RegExp('(\\d+)\\s*'+label, 'i'));
+  if(m) return m[1];
+  m = text.match(new RegExp(label+'[^\\d\\n]{0,25}(\\d+)', 'i'));
+  if(m) return m[1];
+  return '';
+}
+
+const STOPS_BEFORE = ['|','\n','.',' Nights',' Night','Voucher','NAME',':'];
+const STOPS_AFTER = ['Address','Contact','Phone','CTS','Check In','Check-In','CHECK-IN','Tel:','Email','\u2605','http','Chemin','Schiphol'];
+
+// Anchors that show up right after the hotel name in nearly every voucher format,
+// regardless of which hotel or chain it is — unlike a fixed chain-name list, this
+// generalises to independent/boutique properties too.
+const NAME_END_ANCHORS = [
+  /\bAddress\s*:?/i, /\bCTS No\.?/i, /\bGet Directions/i, /\bContact Number\b/i,
+  /\bContact No\.?/i, /\bPhone\s*:?/i, /\bTel\s*:?/i, /\u2605/, /\bMAP LOCATION\b/i
+];
+
+function extractHotelName(text){
+  const r = extractHotelNameDetailed(text);
+  return r ? r.name : '';
+}
+
+function cleanHotelName(raw){
+  let name = raw.replace(/\s+/g,' ').trim();
+  name = name.replace(/^[^A-Za-z]+/, '').replace(/[-|,.\s]+$/,'').trim();
+  if(name.length < 4 || name.length > 80) return '';
+  if(/^(Address|Contact|Phone|Hotel|Booking|Room|Check|Voucher|Details|Name)$/i.test(name)) return '';
+  return name;
+}
+
+function boundaryStart(text, searchStart, idx){
+  const before = text.slice(searchStart, idx);
+  let lastStop = -1;
+  for(const s of STOPS_BEFORE){
+    const i = before.lastIndexOf(s);
+    if(i > -1 && (i+s.length) > lastStop) lastStop = i + s.length;
+  }
+  // a run of digits right before the name (booking refs like "AO 261535724 Doubletree...")
+  // is also a boundary, since real hotel names don't start with a bare number
+  const digitRuns = [...before.matchAll(/\d{2,}/g)];
+  if(digitRuns.length){
+    const lastDigit = digitRuns[digitRuns.length-1];
+    const digitEnd = lastDigit.index + lastDigit[0].length;
+    if(digitEnd > lastStop) lastStop = digitEnd;
+  }
+  return searchStart + (lastStop >= 0 ? lastStop : 0);
+}
+
+function extractHotelNameDetailed(text){
+  // Strategy 1: an explicit "HOTEL NAME" label — the most reliable signal when present
+  // (Rezlive-style vouchers, and the agency's own prepaid voucher template both use it)
+  let m = text.match(/HOTEL NAME\s*[:\-]?\s*([A-Z][A-Za-z0-9&'.,()\-\s]{3,70}?)(?=\s+(?:Chemin|Address|CTS|Contact|Phone|Check|BOOKING|Tel:|MAP|\d{2,}))/i);
+  if(m){
+    const name = cleanHotelName(m[1]);
+    if(name) return {name, endIdx: m.index + m[0].length};
+  }
+
+  // Strategy 2: generic anchor-based — find whichever of Address/CTS/Contact/Phone/
+  // star-rating/Get Directions appears earliest in the document, and treat the text
+  // immediately before it as the hotel name. Works for any hotel, chain or independent.
+  let best = null;
+  for(const anchorRe of NAME_END_ANCHORS){
+    const am = text.match(anchorRe);
+    if(am && (best === null || am.index < best.index)) best = am;
+  }
+  if(best){
+    const searchStart = Math.max(0, best.index - 90);
+    const nameStart = boundaryStart(text, searchStart, best.index);
+    const candidate = cleanHotelName(text.slice(nameStart, best.index));
+    if(candidate) return {name: candidate, endIdx: best.index};
+  }
+
+  // Strategy 3: known chain keywords — last resort, catches cases where none of the
+  // usual anchor labels were present in the extracted text
+  for(const kw of CHAIN_KEYWORDS){
+    const idx = text.indexOf(kw);
+    if(idx === -1) continue;
+    const searchStart = Math.max(0, idx-70);
+    const nameStart = boundaryStart(text, searchStart, idx);
+
+    const after = text.slice(idx, idx+130);
+    let firstStop = after.length;
+    for(const s of STOPS_AFTER){
+      const i = after.indexOf(s, kw.length);
+      if(i > -1 && i < firstStop) firstStop = i;
+    }
+    const digitMatch = after.slice(kw.length).match(/\d{2,}/);
+    if(digitMatch){
+      const digitPos = kw.length + digitMatch.index;
+      if(digitPos < firstStop) firstStop = digitPos;
+    }
+    const name = cleanHotelName(text.slice(nameStart, idx + firstStop));
+    if(name) return {name, endIdx: idx + firstStop};
+  }
+  return null;
+}
+
+function firstMatch(text, patterns){
+  for(const p of patterns){
+    const m = text.match(p);
+    if(m && m[1]) return m[1].trim();
+  }
+  return '';
+}
+
+const ADDRESS_STOPS = ['Check In','Check-In','CHECK-IN','Contact','Tel:','Phone','Email','Get Directions',
+  'Room 1','Room Type','Booking ID','BOOKING ID','Confirmation Number','Confirmation Id',
+  'Thank you for your booking','MAP LOCATION','Map Location'];
+
+function extractHotelAddress(hotelBlock){
+  // strip leading decorative noise (star ratings, "Get Directions" link text) that can
+  // precede the real address when hotel-name detection stopped at one of those markers
+  let block = hotelBlock;
+  let prevLen;
+  do {
+    prevLen = block.length;
+    block = block.replace(/^\s*\u2605+/, '').replace(/^\s*Get Directions\s*/i, '').trimStart();
+  } while(block.length !== prevLen);
+
+  let end = block.length;
+  for(const s of ADDRESS_STOPS){
+    const i = block.indexOf(s);
+    if(i > -1 && i < end) end = i;
+  }
+  // a phone-number-length digit run also marks the end of the address (street numbers /
+  // postal codes are short; phone numbers are long unbroken digit runs)
+  const phoneMatch = block.match(/\+?\d[\d\s\-]{6,}\d/);
+  if(phoneMatch && phoneMatch.index < end) end = phoneMatch.index;
+
+  let addr = block.slice(0, end).replace(/\s+/g,' ').trim();
+  addr = addr.replace(/^(Address)\s*:?\s*/i, '');
+  addr = addr.replace(/^[-|,.\/\s]+/, '').replace(/[-|,.\/\s]+$/, '').trim();
+  if(addr.length > 8 && /\d/.test(addr)) return addr;
+  return '';
+}
+
+function extractHotelContact(hotelBlock){
+  const m = hotelBlock.match(/(?:Contact Number|Contact No\.?|Phone|Tel:?)[^\d+]{0,10}?([+\d][\d\s\-()]{6,20}\d)/i)
+    || hotelBlock.match(/(\+?\d[\d\s\-]{7,17}\d)/);
+  return m ? m[1].trim() : '';
+}
+
+function extractInclusions(text){
+  const found = [];
+  const keywordMap = [
+    [/Bed and Breakfast|Breakfast buffet|Breakfast/i, 'Breakfast'],
+    [/Free\s*Wi-?Fi|Free\s*WiFi|\bWi-?Fi\b/i, 'WiFi'],
+    [/Half Board/i, 'Half Board'],
+    [/Full Board/i, 'Full Board'],
+    [/All[\s-]Inclusive/i, 'All Inclusive'],
+    [/Free valet parking|Free self parking|Free parking/i, 'Parking'],
+    [/Airport (?:shuttle|transfer)/i, 'Airport Transfer']
+  ];
+  for(const [re, label] of keywordMap){
+    if(re.test(text) && !found.includes(label)) found.push(label);
+  }
+  return found.join(' & ');
+}
+
+const TIME_PATTERN = /\d{1,2}(?::\d{2})?\s*(?:AM|PM)/i;
+
+function findTimeNear(text, labelRegex){
+  const flags = labelRegex.flags.includes('g') ? labelRegex.flags : labelRegex.flags+'g';
+  const globalRe = new RegExp(labelRegex.source, flags);
+  let m;
+  while((m = globalRe.exec(text)) !== null){
+    const windowText = text.slice(Math.max(0,m.index-20), m.index + m[0].length + 100);
+    const tm = windowText.match(TIME_PATTERN);
+    if(tm) return tm[0].toUpperCase().replace(/\s+/,' ');
+    if(globalRe.lastIndex === m.index) globalRe.lastIndex++;
+  }
+  return '';
+}
+
+function parseVoucher(text){
+  const f = emptyFields();
+
+  // Confirmation number
+  f.confirmationNumber = firstMatch(text, [
+    /Confirmation\s*Number:?\s*([A-Z0-9-]+)/i,
+    /Booking\s*ID\s*([A-Z0-9]{6,})/i,
+    /Confirmation\s*Id\s*:?\s*([\d-]{4,})/i,
+    /System\s*Reference\s*No\.?\s*:?\s*([A-Z0-9-]{4,})/i,
+    /\bAO\s*(\d{5,})/i,
+    /Booking\s*ID\s*:?\s*([A-Z0-9]{4,})/i
+  ]);
+
+  const hotelInfo = extractHotelNameDetailed(text);
+  f.hotelName = hotelInfo ? hotelInfo.name : '';
+  if(hotelInfo){
+    const hotelBlock = text.slice(hotelInfo.endIdx, hotelInfo.endIdx + 350);
+    f.hotelAddress = extractHotelAddress(hotelBlock);
+    f.hotelContact = extractHotelContact(hotelBlock);
+  }
+
+  // Check-in / Check-out dates + times
+  f.checkIn = findDateNear(text, /Check[\s-]?In\s*:?/i);
+  f.checkOut = findDateNear(text, /Check[\s-]?Out\s*:?/i);
+  f.checkInTime = findTimeNear(text, /Check[\s-]?In\s*:?/i);
+  f.checkOutTime = findTimeNear(text, /Check[\s-]?Out\s*:?/i);
+
+  // Guest name
+  f.guestName = firstMatch(text, [
+    /([A-Za-z][A-Za-z.\s]{2,40}?)\s*\(Primary Guest\)/,
+    /booking,\s*([A-Za-z.\s]{2,40}?)\./i,
+    /LEAD GUEST[\s\S]{0,25}NATIONALITY\s+([A-Za-z][A-Za-z\s]{2,50}?)\s+ROOM/i,
+    /LEAD GUEST[^A-Za-z]{0,40}?([A-Za-z][A-Za-z\s]{2,50}?)\s+ROOM/i,
+    /Guest Details\s*:?\s*\n?\s*(?:Mr\.|Ms\.|Mrs\.)?\s*([A-Za-z.\s]{2,40}?)(?:,|\n)/i,
+    /GUEST DETAILS\s*\n?\s*([A-Za-z.\s]{2,40}?)\s*\(/i
+  ]);
+  // strip common leading label words that get swept up when line breaks are lost
+  f.guestName = f.guestName.replace(/^(Room|Guest|Hotel|Reservation|For|Nights?)\s+/i,'').trim();
+  // strip a trailing nationality word that sometimes rides along (e.g. "George Kattoor Joseph Indian")
+  f.guestName = f.guestName.replace(/\s+(Indian|American|British|Canadian|Australian|Emirati|Filipino|Nepali|Pakistani|Bangladeshi|Sri Lankan)$/i,'').trim();
+
+  // Adults / Children
+  f.adults = extractCount(text, 'Adults?(?:\\s*\\(s\\))?');
+  f.children = extractCount(text, 'Child(?:ren)?(?:\\s*\\(s\\))?') || '0';
+  if(/\bNA\b/.test(text) && !f.children) f.children = '0';
+
+  // Room type — order matters: try specific bounded patterns before generic label matching,
+  // since generic "Room Type" label text has no reliable stop point once line breaks are lost.
+  f.roomType = firstMatch(text, [
+    /Room\s*\d+\s*-\s*([A-Za-z][A-Za-z\s]{3,35}?)(?=\s+\d|\s+Meal|\s+Inclusion|$)/i,
+    /(Standard Room With [A-Za-z0-9\s]{3,30}?)(?=\s*\(|\s+Mr\.|\s+\d)/i,
+    /(Standard King Room(?:\s*\([^)]*\))?)/i,
+    /(King Deluxe Room|Deluxe King Room|Deluxe Guest room(?:,\s*\d+\s*King)?)/i,
+    /Room Type[^A-Za-z]{0,10}([A-Za-z][A-Za-z0-9,\s]{3,30}?)(?=\s+\d\s|\s+UPGRADE|$)/i
+  ]);
+
+  // Nights
+  f.nights = firstMatch(text, [
+    /(\d+)\s*Nights?\b/i,
+    /Your Stay:\s*(\d+)\s*Night/i,
+    /ROOM\(S\)\s*\/\s*NIGHT\(S\)[^\d]{0,10}\d+\s*\/\s*(\d+)/i
+  ]);
+
+  // Rooms and inclusions
+  f.rooms = extractCount(text, 'Rooms?(?:\\s*\\(s\\))?') || '1';
+  f.inclusions = extractInclusions(text);
+
+  // Cancellation policy - grab a relevant chunk
+  let cxl = '';
+  const cxlMarkers = [/Cancellation Policy[\s\S]{0,350}/i, /You may cancel[\s\S]{0,300}/i, /CXL[\s\S]{0,300}/i, /CXL charges apply[\s\S]{0,300}/i];
+  for(const m of cxlMarkers){
+    const mm = text.match(m);
+    if(mm){ cxl = mm[0].replace(/\s+/g,' ').trim(); break; }
+  }
+  f.cancellationPolicy = cxl || 'Not stated in source voucher — verify directly with hotel/OTA before confirming to guest.';
+
+  // Dedicated overlay for the agency's own "LEAD PAX / ROOM TYPE / NIGHTS / ROOMS / ADULTS / CHILD / MEAL"
+  // table layout (Accommodation Voucher template) — table cells are hard to split generically once
+  // flattened to plain text, so this format gets a purpose-built parser.
+  const ownTable = parseLgtOwnTable(text);
+  if(ownTable){
+    if(!f.guestName || f.guestName.length<3) f.guestName = ownTable.guestName;
+    if(!f.roomType) f.roomType = ownTable.roomType;
+    if(!f.nights) f.nights = ownTable.nights;
+    if(!f.adults) f.adults = ownTable.adults;
+    if(ownTable.children !== undefined) f.children = ownTable.children;
+  }
+
+  // Dedicated overlay for the agency's own "Prepaid Hotel Confirmation Voucher" template —
+  // it uses a fixed, distinctive set of ALL-CAPS labels, so once recognised we can extract
+  // every field precisely by capturing "between this label and whichever label comes next",
+  // rather than relying on generic heuristics.
+  if(/DATE VOUCHER ISSUED/i.test(text) && /BOOKED AND PAYABLE BY/i.test(text)){
+    const OFFICIAL_LABELS = ['DATE VOUCHER ISSUED','CONFIRMATION NUMBER','HOTEL NAME','ADDRESS','MAP LOCATION',
+      'HOTEL CONTACT NO','LEAD PASSENGER NAME','ROOM TYPE','INCLUSIONS','NO OF ROOMS','NO OF ADULTS',
+      'NO OF CHILDREN','CHECK-IN DATE','CHECK-OUT DATE','DURATION','CANCELLATION POLICY','BOOKED AND PAYABLE BY'];
+    const getField = (label) => extractBetweenLabels(text, label, OFFICIAL_LABELS);
+
+    const officialConfNum = getField('CONFIRMATION NUMBER');
+    const officialHotelName = getField('HOTEL NAME');
+    const officialAddress = getField('ADDRESS');
+    const officialContact = getField('HOTEL CONTACT NO');
+    const officialGuestName = getField('LEAD PASSENGER NAME');
+    const officialRoomType = getField('ROOM TYPE');
+    const officialInclusions = getField('INCLUSIONS');
+    const officialRooms = getField('NO OF ROOMS');
+    const officialAdults = getField('NO OF ADULTS');
+    const officialChildrenRaw = getField('NO OF CHILDREN');
+    const officialCancellation = getField('CANCELLATION POLICY');
+    const officialBookedBy = getField('BOOKED AND PAYABLE BY');
+    const officialCheckIn = getField('CHECK-IN DATE');
+    const officialCheckOut = getField('CHECK-OUT DATE');
+
+    if(officialConfNum) f.confirmationNumber = cleanFieldValue(officialConfNum);
+    if(officialHotelName) f.hotelName = cleanFieldValue(officialHotelName);
+    if(officialAddress) f.hotelAddress = cleanFieldValue(officialAddress);
+    if(officialContact) f.hotelContact = cleanFieldValue(officialContact);
+    if(officialGuestName) f.guestName = cleanFieldValue(officialGuestName);
+    if(officialRoomType) f.roomType = cleanFieldValue(officialRoomType);
+    if(officialInclusions) f.inclusions = cleanFieldValue(officialInclusions);
+    if(officialRooms) f.rooms = cleanFieldValue(officialRooms).replace(/^0+(?=\d)/,'');
+    if(officialAdults) f.adults = cleanFieldValue(officialAdults).replace(/^0+(?=\d)/,'');
+    // "-" is this template's placeholder for zero — must check the raw (pre-clean) value,
+    // since cleaning strips a lone dash down to an empty string that looks like "not found"
+    if(officialChildrenRaw){
+      f.children = /^[-\u2013\u2014]+$/.test(officialChildrenRaw)
+        ? '0'
+        : cleanFieldValue(officialChildrenRaw).replace(/^0+(?=\d)/,'');
+    }
+    if(officialCancellation) f.cancellationPolicy = cleanFieldValue(officialCancellation);
+    if(officialBookedBy) f.bookedPayableBy = cleanFieldValue(officialBookedBy);
+    if(officialCheckIn){
+      const dm = officialCheckIn.match(/\d{1,2}-[A-Za-z]{3,9}-\d{4}/);
+      const tm = officialCheckIn.match(TIME_PATTERN);
+      if(dm) f.checkIn = dm[0];
+      if(tm) f.checkInTime = tm[0].toUpperCase();
+    }
+    if(officialCheckOut){
+      const dm = officialCheckOut.match(/\d{1,2}-[A-Za-z]{3,9}-\d{4}/);
+      const tm = officialCheckOut.match(TIME_PATTERN);
+      if(dm) f.checkOut = dm[0];
+      if(tm) f.checkOutTime = tm[0].toUpperCase();
+    }
+    const durMatch = text.match(/DURATION\s*:?\s*(\d+)\s*night/i);
+    if(durMatch) f.nights = durMatch[1];
+  }
+
+  return f;
+}
+
+function extractBetweenLabels(text, label, allLabels){
+  const startRe = new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\s*(?:\\(S\\))?\\s*:?', 'i');
+  const m = text.match(startRe);
+  if(!m) return '';
+  const from = m.index + m[0].length;
+  let end = text.length;
+  for(const lbl of allLabels){
+    if(lbl === label) continue;
+    const re = new RegExp('\\b' + lbl.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i');
+    const mm = text.slice(from).match(re);
+    if(mm && mm.index < (end - from)) end = from + mm.index;
+  }
+  return text.slice(from, end).replace(/\s+/g,' ').trim();
+}
+
+function cleanFieldValue(raw){
+  return raw.replace(/^[-:.\s]+/,'').replace(/[-:.\s]+$/,'').trim();
+}
+
+function parseLgtOwnTable(text){
+  const m = text.match(/LEAD PAX[\s\S]{0,60}?MEAL\s+([\s\S]{3,90}?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([A-Za-z][A-Za-z\s&]+)/i);
+  if(!m) return null;
+  const block = m[1];
+  const leadWords = ['Standard','Deluxe','Superior','Executive','Suite','Premium','Classic','King','Queen','Twin','Studio'];
+  let splitIdx = -1;
+  for(const w of leadWords){
+    const mm = block.match(new RegExp('\\b'+w+'\\b'));
+    if(mm && (splitIdx===-1 || mm.index<splitIdx)) splitIdx = mm.index;
+  }
+  const guestName = splitIdx>0 ? block.slice(0,splitIdx).trim() : block.trim();
+  const roomType = splitIdx>0 ? block.slice(splitIdx).trim() : '';
+  return { guestName, roomType, nights:m[2], adults:m[4], children:m[5] };
+}
+
+// ---------- UI: list ----------
+function renderList(){
+  const listArea = document.getElementById('listArea');
+  if(vouchers.length === 0){
+    listArea.className='empty-note';
+    listArea.textContent='Nothing uploaded yet.';
+    return;
+  }
+  listArea.className='';
+  listArea.innerHTML='';
+  vouchers.forEach(v=>{
+    const div = document.createElement('div');
+    div.className = 'v-item' + (v.id===activeId ? ' active':'');
+    const missing = v.fields ? countMissing(v.fields) : 9;
+    let badge;
+    if(v.flags && v.flags.error){
+      badge = `<span class="badge err" title="Could not read this PDF — try re-uploading, or check your connection">Read failed</span>`;
+    } else if(v.fields){
+      badge = missing===0 ? `<span class="badge ok">Parsed</span>` : `<span class="badge warn">${missing} to check</span>`;
+    } else {
+      badge = `<span class="badge warn">Reading…</span>`;
+    }
+    div.innerHTML = `
+      <div class="vi-main" data-id="${v.id}">
+        <div class="vi-hotel">${(v.fields && v.fields.hotelName) || v.filename}</div>
+        <div class="vi-sub">${(v.fields && v.fields.confirmationNumber) || v.filename}</div>
+      </div>
+      ${badge}
+      <button class="del" data-del="${v.id}" title="Remove">✕</button>
+    `;
+    div.querySelector('.vi-main').addEventListener('click', ()=>selectVoucher(v.id));
+    div.querySelector('.del').addEventListener('click', (e)=>{e.stopPropagation(); removeVoucher(v.id);});
+    listArea.appendChild(div);
+  });
+}
+
+function countMissing(fields){
+  const keys = ['confirmationNumber','hotelName','checkIn','checkOut','guestName','adults','roomType','nights'];
+  return keys.filter(k=>!fields[k]).length;
+}
+
+function removeVoucher(id){
+  vouchers = vouchers.filter(v=>v.id!==id);
+  if(activeId===id) activeId = vouchers.length ? vouchers[0].id : null;
+  renderList();
+  if(activeId) selectVoucher(activeId);
+  else document.getElementById('mainArea').innerHTML = '<div class="placeholder">Drop one or more hotel voucher PDFs on the left to auto-extract the booking details and generate an LGT Hotel Stays voucher.</div>';
+}
+
+function selectVoucher(id){
+  activeId = id;
+  renderList();
+  renderReview();
+}
+
+// ---------- UI: review form ----------
+function renderReview(){
+  const v = vouchers.find(x=>x.id===activeId);
+  if(!v || !v.fields) return;
+  const f = v.fields;
+  const main = document.getElementById('mainArea');
+  main.innerHTML = `
+    <div class="review-bar">
+      <h2>Review extracted details</h2>
+      <div class="actions">
+        <button class="secondary" id="btnDownload">Download PDF</button>
+        <button id="btnGenerate">Generate voucher</button>
+      </div>
+    </div>
+    <div class="review-grid" id="reviewGrid"></div>
+    <div id="voucherPreview">
+      <div class="gen-placeholder">Review the details above, then click <b>Generate voucher</b> to create the branded voucher.</div>
+    </div>
+  `;
+  const grid = document.getElementById('reviewGrid');
+  const fieldsMeta = [
+    ['confirmationNumber','Confirmation number(s)'],
+    ['hotelName','Hotel name'],
+    ['hotelAddress','Hotel address'],
+    ['hotelContact','Hotel contact no.'],
+    ['guestName','Lead passenger name(s)'],
+    ['roomType','Room type'],
+    ['inclusions','Inclusions'],
+    ['rooms','No. of rooms'],
+    ['adults','No. of adults'],
+    ['children','No. of children'],
+    ['checkIn','Check-in date'],
+    ['checkInTime','Check-in time'],
+    ['checkOut','Check-out date'],
+    ['checkOutTime','Check-out time'],
+    ['nights','No. of nights'],
+    ['bookedPayableBy','Booked and payable by'],
+  ];
+  fieldsMeta.forEach(([key,label])=>{
+    const wrap = document.createElement('div');
+    const missing = !f[key];
+    wrap.innerHTML = `
+      <label>${label}</label>
+      <input data-key="${key}" class="${missing?'flag':''}" value="${escapeHtml(f[key]||'')}" placeholder="Not detected — enter manually">
+      ${missing?'<div class="flag-note">Could not auto-detect — please verify</div>':''}
+    `;
+    grid.appendChild(wrap);
+  });
+  const cxlWrap = document.createElement('div');
+  cxlWrap.className='full';
+  cxlWrap.innerHTML = `<label>Cancellation policy</label><textarea data-key="cancellationPolicy">${escapeHtml(f.cancellationPolicy||'')}</textarea>`;
+  grid.appendChild(cxlWrap);
+
+  grid.querySelectorAll('input,textarea').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      f[inp.dataset.key] = inp.value;
+    });
+  });
+
+  document.getElementById('btnGenerate').addEventListener('click', ()=>{
+    renderVoucher(v);
+    const el = document.getElementById('voucherToPrint');
+    if(el){
+      el.scrollIntoView({behavior:'smooth', block:'start'});
+      el.classList.remove('flash');
+      void el.offsetWidth; // restart animation if clicked again
+      el.classList.add('flash');
+    }
+  });
+  document.getElementById('btnDownload').addEventListener('click', ()=>{
+    if(!document.getElementById('voucherToPrint')) renderVoucher(v);
+    const el = document.getElementById('voucherToPrint');
+    const btn = document.getElementById('btnDownload');
+    const filename = buildVoucherFilename(f, 'LGT_Voucher');
+
+    if(typeof html2pdf === 'undefined'){
+      alert('The PDF export library could not load (check your internet connection). Use "Print" and choose "Save as PDF" instead.');
+      return;
+    }
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Preparing…';
+    btn.disabled = true;
+    html2pdf().set({
+      margin: 10,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+    }).from(el).save().then(()=>{
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+    }).catch((err)=>{
+      console.error('PDF export failed:', err);
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+      alert('Could not generate the PDF. Please try "Print" and choose "Save as PDF" instead.');
+    });
+  });
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderVoucher(v){
+  const f = v.fields;
+  const staffName = document.getElementById('staffName').value || '—';
+  const staffContact = document.getElementById('staffContact').value || '—';
+  const issueDate = new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+  const nightsNum = parseInt(f.nights,10);
+  const duration = f.nights ? `${String(f.nights).padStart(2,'0')} night${nightsNum===1?'':'s'}` : '—';
+  const checkInFull = [f.checkIn, f.checkInTime].filter(Boolean).join(' / ');
+  const checkOutFull = [f.checkOut, f.checkOutTime].filter(Boolean).join(' / ');
+
+  // Rebuilt fresh every time from whatever is currently in the hotel name / address fields —
+  // never cached from the initial (possibly wrong or empty) auto-extraction, so edits made in
+  // the review form are always reflected in the map link.
+  const mapQuery = [f.hotelName, f.hotelAddress].filter(Boolean).join(', ');
+  const mapUrl = mapQuery ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(mapQuery) : '';
+
+  function row(label, value, opts={}){
+    const cls = opts.strong ? 'row strong' : 'row';
+    let valHtml;
+    if(opts.link){
+      valHtml = value
+        ? `<a href="${escapeHtml(value)}" target="_blank" rel="noopener">${escapeHtml(opts.linkText || value)}</a>`
+        : `<span class="rv-muted">${escapeHtml(opts.emptyText || 'Not available')}</span>`;
+    } else {
+      valHtml = escapeHtml(value || '—');
+    }
+    return `<div class="${cls}"><div class="rk">${label}</div><div class="rv">${valHtml}</div></div>`;
+  }
+
+  const html = `
+  <div class="voucher" id="voucherToPrint">
+    <div class="voucher-head">
+      <img class="voucher-logo" src="${LOGO_DATA_URI}" alt="LGT Hotel Stays">
+      <div class="vh-divider"></div>
+      <div class="vh-title">
+        <div class="t1">Prepaid Hotel</div>
+        <div class="t2">Confirmation Voucher</div>
+      </div>
+    </div>
+
+    <div class="emergency-box">
+      <div class="emergency-title">Emergency Contact Details (24/7 Support)</div>
+      <div class="emergency-body">
+        In case of any issues during check-in/check-out at the hotel, please contact us on the number below.
+      </div>
+      <div class="emergency-contact">
+        <b>${escapeHtml(staffName)}</b> &nbsp;/&nbsp; ${escapeHtml(staffContact)} &nbsp;&nbsp; Email: ops@lgthotelstays.com
+      </div>
+    </div>
+
+    <div class="sec-block">
+      ${row('Date Voucher Issued', issueDate)}
+      ${row('Confirmation Number(s)', f.confirmationNumber, {strong:true})}
+    </div>
+
+    <div class="sec-title">Hotel Details</div>
+    <div class="sec-block">
+      ${row('Hotel Name', f.hotelName, {strong:true})}
+      ${row('Address', f.hotelAddress)}
+      ${row('Map Location', mapUrl, {link:true, linkText:'View on Google Maps', emptyText:'Enter hotel name/address above to generate a map link'})}
+      ${row('Hotel Contact No.', f.hotelContact)}
+    </div>
+
+    <div class="sec-title">Guest &amp; Stay Details</div>
+    <div class="sec-block">
+      ${row('Lead Passenger Name(s)', f.guestName, {strong:true})}
+      ${row('Room Type', f.roomType)}
+      ${row('Inclusions', f.inclusions)}
+      ${row('No. of Rooms', f.rooms)}
+      ${row('No. of Adults', f.adults)}
+      ${row('No. of Children', f.children==='0' ? '\u2013' : f.children)}
+      ${row('Check-in Date', checkInFull, {strong:true})}
+      ${row('Check-out Date', checkOutFull, {strong:true})}
+      ${row('Duration', duration)}
+    </div>
+
+    <div class="sec-title">Policy</div>
+    <div class="policy-box">${escapeHtml(f.cancellationPolicy)}</div>
+    <div class="sec-block" style="margin-top:10px;">
+      ${row('Booked and Payable By', f.bookedPayableBy, {strong:true})}
+    </div>
+
+    <div class="voucher-note">This voucher is valid for the above specified services only. Any other extra service shall be paid by the client at the hotel.</div>
+
+    <div class="v-footer">
+      <div class="stamp">Please carry a valid photo ID at check-in.</div>
+    </div>
+  </div>
+  `;
+  document.getElementById('voucherPreview').innerHTML = html;
+}
+</script>
+</body>
+</html>
