@@ -314,7 +314,7 @@ tr.overdue-row td{border-color:#f3d4c0}
 
 <!-- BLOCKED TAB -->
 <div id="blockedTab" class="tab-panel">
-<p style="color:#3f4750">Every Confirmed or Waiting for Client Response booking appears here with <b>nothing pre-selected</b> — pick <b>On Hold</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Confirmed</b> if it's already settled. Once a booking's payment status is marked <b>Confirmed</b>, it drops off this list for good.</p>
+<p style="color:#3f4750">Every Confirmed or Waiting for Client Response booking appears here with <b>nothing pre-selected</b> — pick <b>On Hold</b> if the company card was used to guarantee/hold the room and still needs settling (this reveals a payment deadline picker, and a banner appears across the app starting 2 days before that date), or <b>Paid</b> if it's already settled. Once a booking's payment status is marked <b>Paid</b>, it drops off this list for good.</p>
 <div class="card" style="overflow-x:auto">
 <div id="blockedFiltersContainer"></div>
 <table>
@@ -1073,7 +1073,7 @@ function renderBlockedTable(visible, searchTerm){
   // list indefinitely after the guest has already checked in.
   const eligible = visible.filter(r =>
     (r.status === 'Confirmed' || r.status === 'Waiting for Client Response')
-    && String(r.paymentStatus || '').trim() !== 'Confirmed'
+    && String(r.paymentStatus || '').trim() !== 'Paid'
     && !hasCheckInPassed_(r.checkin)
   );
   updateFilterNames_('blocked_client', eligible.map(r => r.client));
@@ -1137,17 +1137,17 @@ function buildBlockedRow(r){
   });
 
   // Nothing is checked by default — status is blank until the employee
-  // explicitly picks On Hold or Confirmed. isPaymentConfirmed rows never
-  // actually reach this point in practice (renderBlockedTable filters them
-  // out), but kept explicit here for clarity/robustness.
+  // explicitly picks On Hold or Paid. isPaymentPaid rows never actually
+  // reach this point in practice (renderBlockedTable filters them out),
+  // but kept explicit here for clarity/robustness.
   const paymentStatusVal = String(r.paymentStatus || '').trim();
   const isOnHold = paymentStatusVal === 'On Hold';
-  const isPaymentConfirmed = paymentStatusVal === 'Confirmed';
+  const isPaymentPaid = paymentStatusVal === 'Paid';
   const groupName = 'paystatus_' + r.rowId;
 
   // Only the person who's Handled By this booking, or someone explicitly
   // flagged CanChangePaymentStatus='Yes' in the Users sheet, can flip
-  // On Hold/Confirmed or change the deadline. Deliberately NOT based on
+  // On Hold/Paid or change the deadline. Deliberately NOT based on
   // role === 'Manager' — since most/all accounts here are set to
   // "Manager", that would grant this to everyone and defeat the point.
   // The backend enforces this same rule independently (handleUpdateFields_
@@ -1161,7 +1161,7 @@ function buildBlockedRow(r){
 
   const statusTd = document.createElement('td');
 
-  // On Hold stacked above Confirmed — each on its own line, not side by side.
+  // On Hold stacked above Paid — each on its own line, not side by side.
   const blockedLabel = document.createElement('label');
   blockedLabel.style.cssText = 'display:block;cursor:' + (canChangePayment ? 'pointer' : 'not-allowed');
   const blockedRadio = document.createElement('input');
@@ -1189,15 +1189,15 @@ function buildBlockedRow(r){
   const paidRadio = document.createElement('input');
   paidRadio.type = 'radio';
   paidRadio.name = groupName;
-  paidRadio.checked = isPaymentConfirmed;
+  paidRadio.checked = isPaymentPaid;
   paidRadio.disabled = !canChangePayment;
   paidRadio.onclick = () => {
     deadlineInput.style.display = 'none';
     confNumInput.style.display = 'none';
-    setBlockedField_(r, 'paymentStatus', 'Confirmed'); // row drops off this list once this save completes
+    setBlockedField_(r, 'paymentStatus', 'Paid'); // row drops off this list once this save completes
   };
   paidLabel.appendChild(paidRadio);
-  paidLabel.append(' Confirmed');
+  paidLabel.append(' Paid');
 
   statusTd.appendChild(blockedLabel);
   statusTd.appendChild(paidLabel);
