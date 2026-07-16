@@ -530,11 +530,22 @@ async function refreshFromSheet(showSpinner){
   try{
     const json = await apiGet({ action:'records' });
     data = json.records || [];
-    setSyncStatus('live', '🟢 Live · synced ' + new Date().toLocaleTimeString());
-    render();
   }catch(err){
     console.error('Sync error:', err);
     setSyncStatus('error', '🔴 Sync failed — check connection');
+    isSyncing = false;
+    return;
+  }
+  // Fetch succeeded — render separately so a display bug (bad data in one
+  // row, a DOM error, etc.) can never get mislabeled as a "sync failed /
+  // check connection" network error. It's a different problem and needs a
+  // different message so it's actually findable in the console.
+  try{
+    render();
+    setSyncStatus('live', '🟢 Live · synced ' + new Date().toLocaleTimeString());
+  }catch(err){
+    console.error('Render error:', err);
+    setSyncStatus('error', '🔴 Display error — see console (data synced OK)');
   }finally{
     isSyncing = false;
   }
@@ -1478,9 +1489,9 @@ function buildTicketRow(r){
   const isLockedToSomeoneElse = r.handled && r.handled !== currentUser.name && currentUser.role !== 'Manager';
 
   const dateTd = document.createElement('td'); dateTd.textContent = r.date || ''; tr.appendChild(dateTd);
-  const clientTd = document.createElement('td'); clientTd.textContent = (r.client || '').toUpperCase(); tr.appendChild(clientTd);
+  const clientTd = document.createElement('td'); clientTd.textContent = String(r.client || '').toUpperCase(); tr.appendChild(clientTd);
   const trTd = document.createElement('td');
-  trTd.textContent = (r.tr || '').toUpperCase();
+  trTd.textContent = String(r.tr || '').toUpperCase();
   const dupBtn = document.createElement('button');
   dupBtn.textContent = '+';
   dupBtn.title = 'Duplicate this row (same TR, new ticket)';
@@ -1496,19 +1507,19 @@ function buildTicketRow(r){
   const cityTd = document.createElement('td');
   if (canEditDetails) {
     const inp = document.createElement('input');
-    inp.value = (r.city || '').toUpperCase(); inp.placeholder = 'CITY'; inp.style.width = '80px'; inp.style.fontSize = '12px';
+    inp.value = String(r.city || '').toUpperCase(); inp.placeholder = 'CITY'; inp.style.width = '80px'; inp.style.fontSize = '12px';
     inp.onchange = () => updateDetailField(r.rowId, 'city', inp.value);
     cityTd.appendChild(inp);
-  } else { cityTd.textContent = (r.city || '').toUpperCase(); }
+  } else { cityTd.textContent = String(r.city || '').toUpperCase(); }
   tr.appendChild(cityTd);
 
   const countryTd = document.createElement('td');
   if (canEditDetails) {
     const inp = document.createElement('input');
-    inp.value = (r.country || '').toUpperCase(); inp.placeholder = 'COUNTRY'; inp.style.width = '90px'; inp.style.fontSize = '12px';
+    inp.value = String(r.country || '').toUpperCase(); inp.placeholder = 'COUNTRY'; inp.style.width = '90px'; inp.style.fontSize = '12px';
     inp.onchange = () => updateDetailField(r.rowId, 'country', inp.value);
     countryTd.appendChild(inp);
-  } else { countryTd.textContent = (r.country || '').toUpperCase(); }
+  } else { countryTd.textContent = String(r.country || '').toUpperCase(); }
   tr.appendChild(countryTd);
 
   const checkinTd = document.createElement('td');
